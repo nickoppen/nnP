@@ -1,0 +1,5 @@
+bin/
+obj/
+*.html
+backupOf*
+version.h
