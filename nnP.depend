@@ -1,0 +1,162 @@
+# depslib dependency file v1.0
+1390126888 source:/home/linaro/Work/nnP/main.cpp
+	"nn.hpp"
+	"networkFile.hpp"
+	"dataFile.hpp"
+
+1422265852 /home/linaro/Work/nnP/nn.hpp
+	<sys/stat.h>
+	<sstream>
+	<cstdlib>
+	<math.h>
+	<vector>
+	<time.h>
+	"nnFile.hpp"
+	<stdcl.h>
+
+1422254840 /home/linaro/Work/nnP/nnFile.hpp
+	<fstream>
+	<iostream>
+	<stdlib.h>
+	<vector>
+	"errStruct.hpp"
+
+1382764681 /home/linaro/Work/nnP/twoDFloatArray.hpp
+	<vector>
+
+1421492738 /home/linaro/Work/nnP/errStruct.hpp
+	<assert.h>
+
+1420539590 /home/linaro/Work/nnP/networkFile.hpp
+	"nnFile.hpp"
+	"nn.hpp"
+
+1390277252 /home/linaro/Work/nnP/dataFile.hpp
+	"nnFile.hpp"
+	"nn.hpp"
+
+1422178829 source:/home/linaro/Work/nnP/nnP.cpp
+	"nn.hpp"
+	"networkFile.hpp"
+	"dataFile.hpp"
+
+1421749004 source:/home/linaro/Work/nnP/nn.cl
+	"/home/linaro/Work/nnP/cldefs.inc"
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/sys/stat.h
+	<_ansi.h>
+	<time.h>
+	<sys/types.h>
+	<cygwin/stat.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/_ansi.h
+	<newlib.h>
+	<sys/config.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/newlib.h
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/sys/config.h
+	<machine/ieeefp.h>
+	<sys/features.h>
+	<cygwin/config.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/machine/ieeefp.h
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/sys/features.h
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/time.h
+	"_ansi.h"
+	<sys/reent.h>
+	<machine/time.h>
+	<stddef.h>
+	<sys/types.h>
+	<sys/features.h>
+	<cygwin/time.h>
+	<signal.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/sys/reent.h
+	<_ansi.h>
+	<sys/_types.h>
+	<sys/types.h>
+	<sys/custom_file.h>
+	<assert.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/sys/_types.h
+	<machine/_types.h>
+	<sys/lock.h>
+	<stddef.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/machine/_types.h
+	<machine/_default_types.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/machine/_default_types.h
+	<limits.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/limits.h
+	<newlib.h>
+	<sys/config.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/sys/lock.h
+	<_ansi.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/sys/types.h
+	<_ansi.h>
+	<machine/_types.h>
+	<sys/_types.h>
+	<stddef.h>
+	<machine/types.h>
+	<sys/features.h>
+	<sys/sched.h>
+	<cygwin/types.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/machine/types.h
+	<machine/_types.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/sys/sched.h
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/sys/custom_file.h
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/assert.h
+	"_ansi.h"
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/machine/time.h
+	<sys/types.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/signal.h
+	"_ansi.h"
+	<sys/signal.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/sys/signal.h
+	"_ansi.h"
+	<sys/features.h>
+	<sys/types.h>
+	<cygwin/signal.h>
+	<signal.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/math.h
+	<sys/reent.h>
+	<machine/ieeefp.h>
+	"_ansi.h"
+	<machine/fastmath.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/machine/fastmath.h
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/stdlib.h
+	<machine/ieeefp.h>
+	"_ansi.h"
+	<stddef.h>
+	<sys/reent.h>
+	<machine/stdlib.h>
+	<alloca.h>
+	<cygwin/stdlib.h>
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/machine/stdlib.h
+
+1374571202 /opt/adapteva/esdk/tools/e-gnu/epiphany-elf/sys-include/alloca.h
+	"_ansi.h"
+	<sys/reent.h>
+
+1421402383 /home/linaro/Work/nnP/nncl.inc
+
+1421651346 /home/linaro/Work/nnP/cldefs.inc
+
