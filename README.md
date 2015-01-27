@@ -1,7 +1,5 @@
-# nnP
-The parallella version of my feed forward - back propagation neural network engine.
-
-Source files for the basic feed forward system based on allocating nodes to cores.
+# nnP - Files for my blog entry
+This branch will remain static for future readers of my blog. All development will occur in other branches.
 
 Before you compile this program, check the #defines at the top of the nn.hpp file to make sure that the PATHTOKERNELFILE and PATHTOCLDEFSFILE reflect where these files are on your system. They must be in the same directory.
 
@@ -13,4 +11,3 @@ g++ -L/usr/local/browndeer/lib -o bin/Debug/nnP obj/Debug/nnP.o -lstdcl -locl
 
 Make sure that the paths are correct for your system.
 
-PS This was not added by Andreas. I had not changed the author when I made my first commit.
