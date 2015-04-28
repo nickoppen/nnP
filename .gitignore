@@ -1,5 +1,8 @@
 bin/
+*.save
 obj/
 *.html
 backupOf*
 version.h
+*.depend
+*.layout
