@@ -1,4 +1,4 @@
-#include ".//coreId16.inc"
+#include "//home//linaro//Work//nnP//coreId16.inc"
 //#include <e32_opencl_ext.h>
 //#include <coprthr_device.h>
 
