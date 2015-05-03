@@ -1,9 +1,13 @@
 bin/
+*.save
 obj/
 *.html
 backupOf*
 version.h
 *.depend
 *.layout
+<<<<<<< HEAD
 *.save
 testData/
+=======
+>>>>>>> 1e1401904b886f022bdfe3d292588945de6b6aa5

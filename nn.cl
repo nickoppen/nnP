@@ -1,3 +1,4 @@
+#include "//home//linaro//Work//nnP//coreId16.inc"
 //#include <e32_opencl_ext.h>
 //#include <coprthr_device.h>
 
@@ -13,8 +14,6 @@
 ///#define INITWIDTHARRAY {32,32,16,16}/
 
 
-#define LOCAL_MEM_ADDRESS_BASE(cid) (((32 + ((cid) / 4)) << 26) | ((8 + ((cid) % 4)) << 20))
-
 __kernel void k_forward(    __global float * inVals,
                             __global float * outVals,
                             __global float * debug,
@@ -24,7 +23,6 @@ __kernel void k_forward(    __global float * inVals,
     int n, i, w;            /// node, input, weight
     int d = 0;              /// debug
     int gid = get_global_id(0);
-    int gid_next;
     int layer;
     int firstNode, lastNode;                /// the index of the first and last nodes in the __global node array
     int localFirstNode, localLastNode;      /// the  index of the first and last nodes in the current layer
@@ -34,6 +32,10 @@ __kernel void k_forward(    __global float * inVals,
     int destNodesPerCore, destNodesModulus;
     int curLayerWidth, prevLayerWidth;      /// convenience variables - saves having to do an array look up all the time
     float activationQuant;
+    unsigned int core[] = {core00, core01, core02, core03, core10, core11, core12, core13, core20, core21, core22, core23, core30, core31, core32, core33};
+    unsigned int coreI;
+    unsigned int localCoreId = LOCAL_MEM_ADDRESS_BASE(gid);
+
 
     /// local storage
     __private int   widths[] = INITWIDTHARRAY;
@@ -113,13 +115,19 @@ __kernel void k_forward(    __global float * inVals,
         if (layer < OUTPUTLAYER)
         {
             /// transmit the node values calculated here to all other cores.
-            gid_next = (gid == (CORECOUNT - 1)) ? 0 : gid +1;
-            while (gid_next != gid)
+//            gid_next = (gid == (CORECOUNT - 1)) ? 0 : gid +1;
+//            while (gid_next != gid)
+//            {
+//                for (n=localFirstNode; n < localLastNode; n++)
+//                    *(float *)(LOCAL_MEM_ADDRESS_BASE(gid_next) + ((unsigned int) derived) + (n*sizeof(float))) = derived[n];
+//                gid_next = (gid_next == CORECOUNT - 1) ? 0 : gid_next + 1;
+//                barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+
+            for (coreI = 0; coreI < CORECOUNT; coreI++)
             {
-                for (n=localFirstNode; n < localLastNode; n++)
-                    *(float *)(LOCAL_MEM_ADDRESS_BASE(gid_next) + ((unsigned int) derived) + (n*sizeof(float))) = derived[n];
-                gid_next = (gid_next == CORECOUNT - 1) ? 0 : gid_next + 1;
-                barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+                if (core[coreI] != localCoreId)
+                    for (n=localFirstNode; n < localLastNode; n++)
+                        *(int *)NEIGHBOUR_LOC(core[coreI], derived,  n, (sizeof(float))) = derived[n];
 
 //              debug - watch the derived values arriving at core 0 from the other nodes
 //                if (gid == 0)
