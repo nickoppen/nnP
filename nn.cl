@@ -1,7 +1,7 @@
 //#include <e32_opencl_ext.h>
 //#include <coprthr_device.h>
 
-#include "/home/linaro/Work/nnP/cldefs.inc"
+#include "/home/parallella/Work/nnP/cldefs.inc"
 /// cldefs.inc contains #defines for all static variables
 /// example contents of cldefs.inc
 ///#define CORECOUNT 16

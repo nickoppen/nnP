@@ -2,8 +2,8 @@
 #define _nn_h
 
 #define ennVersion "(1,2,0)"
-#define PATHTOKERNALFILE "//home//linaro//Work//nnP//nn.cl"
-#define PATHTOCLDEFSFILE "//home//linaro//Work//nnP//cldefs.inc"
+#define PATHTOKERNALFILE "//home//parallella//Work//nnP//nn.cl"
+#define PATHTOCLDEFSFILE "//home//parallella//Work//nnP//cldefs.inc"
 
 using namespace std ;
 
