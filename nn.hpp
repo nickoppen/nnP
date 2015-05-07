@@ -171,16 +171,18 @@ class nn
 
             				cl_float * clDebug;
             				clDebug = (cl_float*)clmalloc(pCon, 2048*sizeof(float), 0);
-            				for(i=0;i<2048;i++) clDebug[i]=-1;
+            				for(i=0;i<2048;i++) clDebug[i]=-1000;
 
 
             				for (i=0; i < (*layers)[0].nodeCount; i++)
                                 clInputLayer[i] = (*inputVector)[i];
 
-///                            openHandle = clopen(pCon, 0, CLLD_NOW);                  /// linked in version - the elf file must be linked into the executable at link time
-                            writeDefsFile();
-                            openHandle = clopen(pCon, PATHTOKERNALFILE, CLLD_NOW);      /// JIT compile from file version
-///                             appendDefsToKernalString(); //TODO
+                            openHandle = clopen(pCon, 0, CLLD_NOW);                  /// linked in version - the elf file must be linked into the executable at link time
+
+///                            writeDefsFile();
+///                            openHandle = clopen(pCon, PATHTOKERNALFILE, CLLD_NOW);      /// JIT compile from file version
+
+///                            appendDefsToKernalString(); //TODO
 ///                            openHandle = clsopen(pCon, str_k_forward, CLLD_NOW);     /// string version (not done yet)
 
                             ///  Get the handle to the kernel
@@ -216,13 +218,22 @@ class nn
 
 /// test
                             i=0;
-                            while ((clDebug[i]!=-1) && (i<2048))
+                            if (clDebug[i] >= -1000)           /// if we have put anything in the debug buffer
                             {
-                                cout << clDebug[i++];
-                                if ((i%32) == 0)
-                                     cout << "\n";
-                                else
-                                    cout  << ",";
+                                filebuf fbuf;
+                                fbuf.open(".//nn.csv", std::ios::out);
+                                ostream fout(&fbuf);
+
+                                while ((clDebug[i] > -999) && (i<2048))
+                                {
+                                    if (clDebug[i] > 999)
+                                        fout << "\n";
+                                    else
+                                        fout  << clDebug[i] << ",";
+                                    i++;
+                                }
+                                fout.flush();
+                                fbuf.close();
                             }
 
                             if (runComplete != NULL)

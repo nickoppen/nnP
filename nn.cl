@@ -1,4 +1,4 @@
-#include "//home//linaro//Work//nnP//coreId16.inc"
+#include "/home/parallella/Work/nnP/coreId16.inc"
 //#include <e32_opencl_ext.h>
 //#include <coprthr_device.h>
 
@@ -72,6 +72,13 @@ __kernel void k_forward(    __global float * inVals,
             for (i=0; i<prevLayerWidth; i++)
                 in[i] = derived[i];
 
+        if (gid == 0)
+        {
+            for (i=0; i<prevLayerWidth; i++)
+                debug[d++] = in[i];
+            debug[d++] = 1000.0;
+        }
+
             /// testing - inialise the derived layer to see what values have ben calculated
         for (i=0; i<LARGESTDERIVEDLAYER; i++)
             derived[i]= (float)1.0;
@@ -111,29 +118,22 @@ __kernel void k_forward(    __global float * inVals,
             lastWeight += prevLayerWidth;
         }
 
-        barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
         if (layer < OUTPUTLAYER)
         {
             /// transmit the node values calculated here to all other cores.
-//            gid_next = (gid == (CORECOUNT - 1)) ? 0 : gid +1;
-//            while (gid_next != gid)
-//            {
-//                for (n=localFirstNode; n < localLastNode; n++)
-//                    *(float *)(LOCAL_MEM_ADDRESS_BASE(gid_next) + ((unsigned int) derived) + (n*sizeof(float))) = derived[n];
-//                gid_next = (gid_next == CORECOUNT - 1) ? 0 : gid_next + 1;
-//                barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
-
             for (coreI = 0; coreI < CORECOUNT; coreI++)
             {
                 if (core[coreI] != localCoreId)
                     for (n=localFirstNode; n < localLastNode; n++)
-                        *(int *)NEIGHBOUR_LOC(core[coreI], derived,  n, (sizeof(float))) = derived[n];
+                        *(float *)NEIGHBOUR_LOC(core[coreI], derived,  n, (sizeof(float))) = derived[n];
 
 //              debug - watch the derived values arriving at core 0 from the other nodes
 //                if (gid == 0)
 //                    for (i=0; i<curLayerWidth; i++)
 //                        debug[d++] = derived[i];
             }
+            /// make sure that every core has passed all values before proceeding onto the next layer
+            barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
         }
         else
         {
