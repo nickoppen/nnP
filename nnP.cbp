@@ -19,10 +19,6 @@
 				<Option run_host_application_in_terminal="1" />
 				<Option projectCompilerOptionsRelation="1" />
 				<Option projectLinkerOptionsRelation="1" />
-				<ExtraCommands>
-					<Add after="e-objcopy --srec-forceS3 --output-target srec /home/linaro/Work/nnP/bin/Debug/nnP.elf /home/linaro/Work/nnP/bin/Debug/nnP.srec" />
-					<Mode after="always" />
-				</ExtraCommands>
 			</Target>
 			<Target title="Debug">
 				<Option platforms="Unix;" />
@@ -30,10 +26,13 @@
 				<Option object_output="obj/Debug/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
-				<Option parameters="-n t2.nn -r /home/linaro/Work/nnP/testData/hex/t2.dat" />
+				<Option parameters="-n /home/parallella/Work/nnP/testData/t3.nn -r /home/parallella/Work/nnP/testData/t3.dat" />
 				<Compiler>
 					<Add option="-g" />
 				</Compiler>
+				<Linker>
+					<Add option="./obj/Debug/nn.cl.o" />
+				</Linker>
 			</Target>
 			<Target title="Release">
 				<Option output="bin/Release/nnP" prefix_auto="1" extension_auto="1" />

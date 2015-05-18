@@ -13,12 +13,13 @@
 ///#define LARGESTINPUTLAYER 32          // max of all the layers that feed into other layers
 ///#define INITWIDTHARRAY {32,32,16,16}/
 
-
-__kernel void k_forward(    __global float * inVals,
-                            __global float * outVals,
-                            __global float * debug,
-                            __global float * nodeBiases,     // nodeBiases all in one big array
-                            __global float * weights)        // weights for all layers in one big array
+void forwardPass(   float * g_inVals,
+                    float * g_nodeBiases,
+                    float * g_weights,
+                    float * derived,
+                    int * finalFirstNode,
+                    int * finalLastNode,
+           __global float * debug)
 {
     int n, i, w;            /// node, input, weight
     int d = 0;              /// debug
@@ -42,7 +43,6 @@ __kernel void k_forward(    __global float * inVals,
     __private float wgt[MAXWEIGHTTOLAYER];
     __private float biases[LARGESTDERIVEDLAYER];
     __private float in[LARGESTINPUTLAYER];
-    __private float derived[LARGESTDERIVEDLAYER];
 
     for(layer = 1; layer<LAYERCOUNT; layer++)
     {
@@ -59,37 +59,37 @@ __kernel void k_forward(    __global float * inVals,
         firstWeight = wgtIndexOffset + (localFirstNode * prevLayerWidth);
         lastWeight = firstWeight + ((lastNode - firstNode) * prevLayerWidth);
 
-      ///memcopy(...);     /// only copy in the weights that are needed for this node
+      ///memcopy(...);     /// only copy in the g_weights that are needed for this node
         w=0;
         for (i=firstWeight; i<lastWeight; i++)
-            wgt[w++] = weights[i];
+            wgt[w++] = g_weights[i];
 
         /// memcopy(..);
         if (layer == 1)                             /// input layer to first hidden layer
             for (i=0; i<widths[0]; i++)
-                in[i] = inVals[i];
+                in[i] = g_inVals[i];
         else                                        /// all other layers
             for (i=0; i<prevLayerWidth; i++)
                 in[i] = derived[i];
 
-        if (gid == 0)
-        {
-            for (i=0; i<prevLayerWidth; i++)
-                debug[d++] = in[i];
-            debug[d++] = 1000.0;
-        }
+//        if (gid == 0)
+//        {
+//            for (i=0; i<prevLayerWidth; i++)
+//                debug[d++] = in[i];
+//            debug[d++] = 1000.0;
+//        }
 
-            /// testing - inialise the derived layer to see what values have ben calculated
-        for (i=0; i<LARGESTDERIVEDLAYER; i++)
-            derived[i]= (float)1.0;
+//            /// testing - inialise the derived layer to see what values have ben calculated
+//        for (i=0; i<LARGESTDERIVEDLAYER; i++)
+//            derived[i]= (float)1.0;
 
         ///memcopy(..);
         n = localFirstNode;
         for (i=firstNode; i<lastNode; i++)
-            biases[n++] = nodeBiases[i];              /// allocate enough space for a whole bias vector in the layer but only copy the one this core needs
+            biases[n++] = g_nodeBiases[i];              /// allocate enough space for a whole bias vector in the layer but only copy the one this core needs
 
 
-        firstWeight = 0;                            /// only the weights relevant to thse nodes have been copied into local memory
+        firstWeight = 0;                            /// only the g_weights relevant to thse nodes have been copied into local memory
         lastWeight = prevLayerWidth;               /// check boundry condition on the very last weight into the output layer
         for (n=localFirstNode; n<localLastNode; n++)
         {
@@ -97,21 +97,9 @@ __kernel void k_forward(    __global float * inVals,
             i=0;                                    /// i is the index into the input vector which starts for 0 for every node;
             for (w=firstWeight; w<lastWeight; w++)
             {
-//                if (gid == 15)
-//                {
-//                    debug[d++] = in[i];
-//                    debug[d++] = wgt[w];
-//                    debug[d++] = in[i] * wgt[w];  /// test
-//                }
                 activationQuant += in[i++] * wgt[w];
             }
 
-//            if (gid == 9) /// test
-//            {
-//                debug[d++] = activationQuant;
-//                debug[d++] = biases[n];
-//                debug[d++]  = (1.0 / (1.0 + (float)exp(-(biases[n] + activationQuant))));
-//            }
             derived[n] = (1.0 / (1.0 + (float)exp(-(biases[n] + activationQuant))));      // sigmoid function f(t) = 1/(1 + e^(-t))
 
             firstWeight = lastWeight;
@@ -127,21 +115,44 @@ __kernel void k_forward(    __global float * inVals,
                     for (n=localFirstNode; n < localLastNode; n++)
                         *(float *)NEIGHBOUR_LOC(core[coreI], derived,  n, (sizeof(float))) = derived[n];
 
-//              debug - watch the derived values arriving at core 0 from the other nodes
-//                if (gid == 0)
-//                    for (i=0; i<curLayerWidth; i++)
-//                        debug[d++] = derived[i];
             }
             /// make sure that every core has passed all values before proceeding onto the next layer
             barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+
+            nodeIndexOffset += curLayerWidth; /// the length of the node bias array is the sum of the layer widths
+            wgtIndexOffset += curLayerWidth * prevLayerWidth;
         }
         else
         {
-            for(n=localFirstNode; n<localLastNode; n++)
-                outVals[n] = derived[n];        /// put the last derived vector into outVals for transmission to the host
+            *finalFirstNode = localFirstNode;    /// remember where we are before returning
+            *finalLastNode = localLastNode;
         }
-
-        nodeIndexOffset += curLayerWidth; /// the length of the node bias array is the sum of the layer widths
-        wgtIndexOffset += curLayerWidth * prevLayerWidth;
     }
+}
+
+__kernel void k_forward(    __global float * g_inVals,         /// incoming: the input values to the net
+                            __global float * g_nodeBiases,     /// incoming: g_nodeBiases all in one big array
+                            __global float * g_weights,        /// incoming: g_weights for all layers in one big array
+                            __global float * g_outVals,        /// outgoing: the results of the run
+                            __global float * debug)
+{
+    int finalFirstNode, finalLastNode;
+    int n;
+
+    __private float derived[LARGESTDERIVEDLAYER];
+
+    forwardPass(g_inVals, g_nodeBiases, g_weights, derived, &finalFirstNode, &finalLastNode, debug);
+
+    for(n=finalFirstNode; n<finalLastNode; n++)
+        g_outVals[n] = derived[n];        /// put the last derived vector into g_outVals for transmission to the host
+}
+
+__kernel void k_train(    __global float * g_inVals,          /// incoming: the input values to the new
+                          __global float * desiredVals,     /// incoming: the desired outputvalues
+                          __global float * g_nodeBiases,      /// incoming: g_nodeBiases all in one big array
+                          __global float * g_weights,         /// incoming: g_weights for all layers in one big array
+                          __global float * deltas,          /// outgoing: the cumulative differentials between the actual output and the deisred output
+                          __global float * debug)
+{
+
 }

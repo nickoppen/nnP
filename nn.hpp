@@ -177,10 +177,10 @@ class nn
             				for (i=0; i < (*layers)[0].nodeCount; i++)
                                 clInputLayer[i] = (*inputVector)[i];
 
-                            openHandle = clopen(pCon, 0, CLLD_NOW);                  /// linked in version - the elf file must be linked into the executable at link time
+///                            openHandle = clopen(pCon, 0, CLLD_NOW);                  /// linked in version - the elf file must be linked into the executable at link time
 
-///                            writeDefsFile();
-///                            openHandle = clopen(pCon, PATHTOKERNALFILE, CLLD_NOW);      /// JIT compile from file version
+                            writeDefsFile();
+                            openHandle = clopen(pCon, PATHTOKERNALFILE, CLLD_NOW);      /// JIT compile from file version
 
 ///                            appendDefsToKernalString(); //TODO
 ///                            openHandle = clsopen(pCon, str_k_forward, CLLD_NOW);     /// string version (not done yet)
@@ -203,10 +203,10 @@ class nn
    //cout <<   "Calling clforka\n";
                             clforka(pCon, 0, krn, &ndr, CL_EVENT_NOWAIT,
                                         clInputLayer,
-                                        clOutputLayer,
-                                        clDebug,
                                         clNodeBiases,
-                                        clWeights);
+                                        clWeights,
+                                        clOutputLayer,
+                                        clDebug);
                      //for (i=0; i<16; i++)
                        // local_run(i, layerCount, clLayerWidths,clInputLayer, clOutputLayer, clNodeBiases, clWeights);
 
