@@ -322,11 +322,88 @@ class nn
                         {
                             try
                             {
-                                // run
-                                run(inputVector);
+                                unsigned int i;
+                                void * openHandle;
+                                cl_kernel krn;
+                                clndrange_t ndr;
+    //            				char strInfo[128];
+    //            				CONTEXT * pCon = stdcpu;        // the cpu context !! all the storage exists in the atdacc context so this will not work as is
+                                CONTEXT * pCon = stdacc;
 
-                                if (trComplete != NULL)
-                                    trComplete((void*)this);
+                                cl_float * clDebug;
+                                clDebug = (cl_float*)clmalloc(pCon, 2048*sizeof(float), 0);
+                                for(i=0;i<2048;i++) clDebug[i]=-1000;
+
+
+                                for (i=0; i < (*layers)[0].nodeCount; i++)
+                                    clInputLayer[i] = (*inputVector)[i];
+                                for (i=0; i < (*layers)[layerCount-1].nodeCount; i++)
+                                    clDesiredOutput[i] = (*desiredVector)[i];
+
+    ///                            openHandle = clopen(pCon, 0, CLLD_NOW);                  /// linked in version - the elf file must be linked into the executable at link time
+
+                                writeDefsFile();
+                                openHandle = clopen(pCon, PATHTOKERNALFILE, CLLD_NOW);      /// JIT compile from file version
+
+    ///                            appendDefsToKernalString(); //TODO
+    ///                            openHandle = clsopen(pCon, str_k_forward, CLLD_NOW);     /// string version (not done yet)
+
+                                ///  Get the handle to the kernel
+                                krn = clsym(pCon, openHandle, "k_train", CLLD_NOW);
+
+    //                            clGetKernelInfo(krn, CL_KERNEL_FUNCTION_NAME, sizeof(strInfo), strInfo, NULL);
+
+                                ndr = clndrange_init1d(0, 16, 16);      // get the core count from a cl call
+
+                                /// transfer the inputdata biases and wieghts to the acc using clsync(,,, C_MEM_DEVICE|CL_EVENT_NOWAIT)
+                                clmsync(pCon, 0, clInputLayer, CL_MEM_DEVICE|CL_EVENT_NOWAIT);
+                                clmsync(pCon, 0, clDesiredOutput, CL_MEM_DEVICE|CL_EVENT_NOWAIT);
+                                clmsync(pCon, 0, clNodeBiases, CL_MEM_DEVICE|CL_EVENT_NOWAIT);
+                                clmsync(pCon, 0, clWeights, CL_MEM_DEVICE|CL_EVENT_NOWAIT);
+                                clmsync(pCon, 0, clOutputError, CL_MEM_DEVICE|CL_EVENT_NOWAIT);     /// not sure if I have to sync this one here
+
+                                clmsync(pCon, 0, clDebug, CL_MEM_DEVICE|CL_EVENT_NOWAIT);
+
+       //cout <<   "Calling clforka\n";
+                                clforka(pCon, 0, krn, &ndr, CL_EVENT_NOWAIT,
+                                            clInputLayer,
+                                            clDesiredOutput,
+                                            clNodeBiases,
+                                            clWeights,
+                                            clOutputError,
+                                            clDebug);
+                         //for (i=0; i<16; i++)
+                           // local_run(i, layerCount, clLayerWidths,clInputLayer, clOutputLayer, clNodeBiases, clWeights);
+
+       //cout <<   "Transferring memory contents from the Epiphany using clmsync\n";
+                                clmsync(pCon, 0, clOutputError, CL_MEM_HOST|CL_EVENT_NOWAIT);
+                                clmsync(pCon, 0, clDebug, CL_MEM_HOST|CL_EVENT_NOWAIT);
+                                clflush(pCon, 0, 0);
+                                clwait(pCon, 0, CL_ALL_EVENT);
+
+    /// test
+                                i=0;
+                                if (clDebug[i] >= -1000)           /// if we have put anything in the debug buffer
+                                {
+                                    filebuf fbuf;
+                                    fbuf.open(".//nn.csv", std::ios::out);
+                                    ostream fout(&fbuf);
+
+                                    while ((clDebug[i] > -999) && (i<2048))
+                                    {
+                                        if (clDebug[i] > 999)
+                                            fout << "\n";
+                                        else
+                                            fout  << clDebug[i] << ",";
+                                        i++;
+                                    }
+                                    fout.flush();
+                                    fbuf.close();
+                                }
+
+
+                                    if (trComplete != NULL)
+                                        trComplete((void*)this);
                             }
                             catch (internal_Error & iErr)
                             {
@@ -926,6 +1003,8 @@ class nn
     cl_int      *       clLayerWidths;
     cl_float    *       clInputLayer;
     cl_float    *       clOutputLayer;
+    cl_float    *       clDesiredOutput;
+    cl_float    *       clOutputError;
     cl_float    *       clWeights;          // all of the network's weights in one big array
     cl_float    *       clNodeBiases;       // the biases for each node used to calculate the node output
     cl_int      *       clNodeWeightIndex;  // the index into the weight array where this node's weights star

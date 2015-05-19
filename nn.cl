@@ -55,7 +55,7 @@ void forwardPass(   float * g_inVals,
         firstNode = nodeIndexOffset + ((gid * destNodesPerCore) + min(gid, destNodesModulus)); /// all node biases are in one big array so nodeIndexOffset records where the current layer starts
         lastNode = firstNode + destNodesPerCore + ((gid < destNodesModulus) ? 1 : 0);
         localFirstNode = firstNode - nodeIndexOffset;                   /// firstNode - nodeIndexOffset is the node index within the current  layer
-        localLastNode = lastNode - nodeIndexOffset;                     /// localFirstNode and localLastNode align with the derived value attay
+        localLastNode = lastNode - nodeIndexOffset;                     /// localFirstNode and localLastNode align with the derived value array
         firstWeight = wgtIndexOffset + (localFirstNode * prevLayerWidth);
         lastWeight = firstWeight + ((lastNode - firstNode) * prevLayerWidth);
 
@@ -148,11 +148,28 @@ __kernel void k_forward(    __global float * g_inVals,         /// incoming: the
 }
 
 __kernel void k_train(    __global float * g_inVals,          /// incoming: the input values to the new
-                          __global float * desiredVals,     /// incoming: the desired outputvalues
+                          __global float * g_desiredVals,     /// incoming: the desired outputvalues
                           __global float * g_nodeBiases,      /// incoming: g_nodeBiases all in one big array
                           __global float * g_weights,         /// incoming: g_weights for all layers in one big array
-                          __global float * deltas,          /// outgoing: the cumulative differentials between the actual output and the deisred output
+                          __global float * g_deltas,          /// outgoing: the cumulative differentials between the actual output and the deisred output
                           __global float * debug)
 {
+    int finalFirstNode, finalLastNode;
+    int n;
+
+    __private int   widths[] = INITWIDTHARRAY;
+    __private float derived[LARGESTDERIVEDLAYER];        // could restrict this to the width of the output layer
+    __private float deltas[LARGESTDERIVEDLAYER];        // could restrict this to the width of the output layer
+
+    forwardPass(g_inVals, g_nodeBiases, g_weights, derived, &finalFirstNode, &finalLastNode, debug);
+
+    /// calculate the deltas
+    for (n = finalFirstNode; n < finalLastNode; n++)
+        deltas[n] = g_desiredVals[n] - derived[n];      /// width of desired == width outputlayer
+
+    /// passs the final deltas back
+    for(n = finalFirstNode; n < finalLastNode; n++)
+        g_deltas[n] = deltas[n];
+
 
 }
