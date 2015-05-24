@@ -117,6 +117,7 @@ class nn
                             if (clNodeBiases)   clfree((void*)clNodeBiases);
                             if (clWeights)      clfree((void*)clWeights);
                             if (clLayerWidths)  clfree((void*)clLayerWidths);
+                            if (clOutputError)  clfree((void*)clOutputError);
 
  // not not a pointer                       	delete errorVector;
                         	for (i=0; i<layerCount; i++)
@@ -207,8 +208,6 @@ class nn
                                         clWeights,
                                         clOutputLayer,
                                         clDebug);
-                     //for (i=0; i<16; i++)
-                       // local_run(i, layerCount, clLayerWidths,clInputLayer, clOutputLayer, clNodeBiases, clWeights);
 
    //cout <<   "Transferring memory contents from the Epiphany using clmsync\n";
                             clmsync(pCon, 0, clOutputLayer, CL_MEM_HOST|CL_EVENT_NOWAIT);
@@ -329,6 +328,7 @@ class nn
     //            				char strInfo[128];
     //            				CONTEXT * pCon = stdcpu;        // the cpu context !! all the storage exists in the atdacc context so this will not work as is
                                 CONTEXT * pCon = stdacc;
+                                cl_float * clDesiredOutput = (cl_float*)clmalloc(pCon, desiredVector->size() * sizeof(float), 0);
 
                                 cl_float * clDebug;
                                 clDebug = (cl_float*)clmalloc(pCon, 2048*sizeof(float), 0);
@@ -340,10 +340,10 @@ class nn
                                 for (i=0; i < (*layers)[layerCount-1].nodeCount; i++)
                                     clDesiredOutput[i] = (*desiredVector)[i];
 
-    ///                            openHandle = clopen(pCon, 0, CLLD_NOW);                  /// linked in version - the elf file must be linked into the executable at link time
+                                openHandle = clopen(pCon, 0, CLLD_NOW);                  /// linked in version - the elf file must be linked into the executable at link time
 
-                                writeDefsFile();
-                                openHandle = clopen(pCon, PATHTOKERNALFILE, CLLD_NOW);      /// JIT compile from file version
+///                                writeDefsFile();
+///                                openHandle = clopen(pCon, PATHTOKERNALFILE, CLLD_NOW);      /// JIT compile from file version
 
     ///                            appendDefsToKernalString(); //TODO
     ///                            openHandle = clsopen(pCon, str_k_forward, CLLD_NOW);     /// string version (not done yet)
@@ -372,8 +372,6 @@ class nn
                                             clWeights,
                                             clOutputError,
                                             clDebug);
-                         //for (i=0; i<16; i++)
-                           // local_run(i, layerCount, clLayerWidths,clInputLayer, clOutputLayer, clNodeBiases, clWeights);
 
        //cout <<   "Transferring memory contents from the Epiphany using clmsync\n";
                                 clmsync(pCon, 0, clOutputError, CL_MEM_HOST|CL_EVENT_NOWAIT);
@@ -421,11 +419,14 @@ class nn
              *
              */
 						{
-            				if (errorVector->size() != (*layers)[layerNWidth()].nodeCount)
+                            unsigned int i;
+                            unsigned int outputNodeCount = layerNWidth();
+
+            				if (errorVector->size() != outputNodeCount)
             					return FAILURE;
             				else
-            		//			theOutputLayer->trainingError(errorVector);
-            					;
+                                for (i = 0; i < outputNodeCount; i++)
+                                    (*errorVector)[i] = clOutputError[i];
 							return SUCCESS;
 						}
 
@@ -791,6 +792,7 @@ class nn
 
                 clInputLayer = (cl_float*) clmalloc(stdacc, (size_t)layerZeroWidth() * sizeof(cl_float), 0);
                 clOutputLayer = (cl_float*) clmalloc(stdacc, (size_t)layerNWidth() * sizeof(cl_float), 0);
+                clOutputError = (cl_float*) clmalloc(stdacc, (size_t)layerNWidth() * sizeof(cl_float), 0);
                 //testing
                 for (i=0;i<(cl_int)layerNWidth();i++)
                     clOutputLayer[i] = -1.0;
@@ -1003,7 +1005,6 @@ class nn
     cl_int      *       clLayerWidths;
     cl_float    *       clInputLayer;
     cl_float    *       clOutputLayer;
-    cl_float    *       clDesiredOutput;
     cl_float    *       clOutputError;
     cl_float    *       clWeights;          // all of the network's weights in one big array
     cl_float    *       clNodeBiases;       // the biases for each node used to calculate the node output

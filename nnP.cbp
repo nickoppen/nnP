@@ -26,7 +26,7 @@
 				<Option object_output="obj/Debug/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
-				<Option parameters="-n /home/parallella/Work/nnP/testData/t3.nn -r /home/parallella/Work/nnP/testData/t3.dat" />
+				<Option parameters="-n /home/parallella/Work/nnP/testData/t3.nn -t /home/parallella/Work/nnP/testData/t3.tr" />
 				<Compiler>
 					<Add option="-g" />
 				</Compiler>

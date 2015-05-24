@@ -10,7 +10,7 @@ void callback_RunComplete(const int index, void * caller)
 
 	resVec = new vector<float>(((nn*)caller)->layerNWidth());
 	resVec = ((nn*)caller)->runResult(resVec);
-//	cout << "Index: " << index << " results -";
+	cout << "Node,Value";
 	for(i = 0; i< resVec->size(); i++)
 		cout << "\n" << i << "," << (*resVec)[i];
 	cout << "\n";
@@ -26,9 +26,9 @@ void callback_TrainingComplete(void * caller)
 
 	if ( ((nn*)caller)->trainingError(errVec) == SUCCESS)
 	{
-		cout << "Last Training Error Vector -";
+		cout << "Node,Error";
 		for(i = 0; i< errVec->size(); i++)
-			cout << " " << i << ": " << (*errVec)[i];
+			cout << "\n" << i << "," << (*errVec)[i];
 		cout << "\n";
 	}
 	else
