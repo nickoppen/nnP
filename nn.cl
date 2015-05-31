@@ -17,6 +17,7 @@ void forwardPass(   float * g_inVals,
                     float * g_nodeBiases,
                     float * g_weights,
                     float * derived,
+                    int   * widths,
                     int * finalFirstNode,
                     int * finalLastNode,
            __global float * debug)
@@ -39,7 +40,7 @@ void forwardPass(   float * g_inVals,
 
 
     /// local storage
-    __private int   widths[] = INITWIDTHARRAY;
+//    __private int   widths[] = INITWIDTHARRAY;
     __private float wgt[MAXWEIGHTTOLAYER];
     __private float biases[LARGESTDERIVEDLAYER];
     __private float in[LARGESTINPUTLAYER];
@@ -130,28 +131,39 @@ void forwardPass(   float * g_inVals,
     }
 }
 
+///======================================================================================================================
+
+///         FEED FORWARD
+
+///======================================================================================================================
 __kernel void k_forward(    __global float * g_inVals,         /// incoming: the input values to the net
                             __global float * g_nodeBiases,     /// incoming: g_nodeBiases all in one big array
                             __global float * g_weights,        /// incoming: g_weights for all layers in one big array
                             __global float * g_outVals,        /// outgoing: the results of the run
                             __global float * debug)
 {
+    __private int   widths[] = INITWIDTHARRAY;
     int finalFirstNode, finalLastNode;
     int n;
 
     __private float derived[LARGESTDERIVEDLAYER];
 
-    forwardPass(g_inVals, g_nodeBiases, g_weights, derived, &finalFirstNode, &finalLastNode, debug);
+    forwardPass(g_inVals, g_nodeBiases, g_weights, derived, widths, &finalFirstNode, &finalLastNode, debug);
 
     for(n=finalFirstNode; n<finalLastNode; n++)
         g_outVals[n] = derived[n];        /// put the last derived vector into g_outVals for transmission to the host
 }
 
+///======================================================================================================================
+
+///         TRAIN
+
+///======================================================================================================================
 __kernel void k_train(    __global float * g_inVals,          /// incoming: the input values to the new
                           __global float * g_desiredVals,     /// incoming: the desired outputvalues
                           __global float * g_nodeBiases,      /// incoming: g_nodeBiases all in one big array
                           __global float * g_weights,         /// incoming: g_weights for all layers in one big array
-                          __global float * g_deltas,          /// outgoing: the cumulative differentials between the actual output and the deisred output
+                          __global float * g_error,          /// outgoing: the cumulative differentials between the actual output and the deisred output
                           __global float * debug)
 {
     int finalFirstNode, finalLastNode;
@@ -159,17 +171,25 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
 
     __private int   widths[] = INITWIDTHARRAY;
     __private float derived[LARGESTDERIVEDLAYER];        // could restrict this to the width of the output layer
-    __private float deltas[LARGESTDERIVEDLAYER];        // could restrict this to the width of the output layer
+    __private float delta[LARGESTDERIVEDLAYER];        // could restrict this to the width of the output layer
+    __private float outputError[LARGESTDERIVEDLAYER];       ///
 
-    forwardPass(g_inVals, g_nodeBiases, g_weights, derived, &finalFirstNode, &finalLastNode, debug);
+    forwardPass(g_inVals, g_nodeBiases, g_weights, derived, widths, &finalFirstNode, &finalLastNode, debug);
 
     /// calculate the deltas
     for (n = finalFirstNode; n < finalLastNode; n++)
-        deltas[n] = g_desiredVals[n] - derived[n];      /// width of desired == width outputlayer
+        outputError[n] = g_desiredVals[n] - derived[n];      /// width of desired == width outputlayer
 
     /// passs the final deltas back
     for(n = finalFirstNode; n < finalLastNode; n++)
-        g_deltas[n] = deltas[n];
+        g_error[n] = outputError[n];
+
+    /// calculate the weight update delta for each output node
+    for(n = finalFirstNode; n < finalLastNode; n++)
+    {
+        delta[n] = derived[n] * (1 - derived[n]) * outputError[n];
+        debug[n] = delta[n];        // just checking
+    }
 
 
 }
