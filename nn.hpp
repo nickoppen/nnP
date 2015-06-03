@@ -70,7 +70,7 @@ class nn
 
 							setNetworkTopology(&widths);
 							networkName = newName;
-							trainingLearningRate = learningRateParam;
+							clLearningRate = (cl_float)learningRateParam;
 
                             randomise();
                             majorVersion = minorVersion = revision = 0;
@@ -83,7 +83,7 @@ class nn
 
 							setNetworkTopology(networkTopo);
 							networkName = newName;
-							trainingLearningRate = learningRate;
+							clLearningRate = (cl_float)learningRate;
 
                             randomise();
                             majorVersion = minorVersion = revision = 0;
@@ -371,6 +371,7 @@ class nn
                                             clNodeBiases,
                                             clWeights,
                                             clOutputError,
+                                            clLearningRate,
                                             clDebug);
 
        //cout <<   "Transferring memory contents from the Epiphany using clmsync\n";
@@ -655,7 +656,7 @@ class nn
                     ss << (*layers)[layerI].nodeCount << ",";
                 ss <<  (*layers)[layerI].nodeCount << ")\n"; // finish with the )
 
-				ss << "learning(" << trainingLearningRate << "," << trainingMomentum << ")\n";
+				ss << "learning(" << clLearningRate << "," << clTrainingMomentum << ")\n";
 
 				ss << "comment(link(layer, to node, from node, weight))\n";
 				ss << "comment(node(layer, node, bias))\n";
@@ -876,13 +877,13 @@ class nn
 			void setTrainingLearningRate(float learningRate)
 			{
 //				cout << "setting LR:" << learningRate << "\n";
-				trainingLearningRate = learningRate;
+				clLearningRate = (cl_float)learningRate;
 			}
 
 			void setTrainingMomentum(float momentum)
 			{
 //				cout << "setting momentum:" << momentum << "\n";
-				trainingMomentum = momentum;
+				clTrainingMomentum = (cl_float)momentum;
 			}
 
 			void setHasBiasNode(unsigned int layer, bool hasBiasNode)
@@ -1018,8 +1019,8 @@ class nn
     unsigned int        largestDerivedLayer;/// the widest layer not including the input layer
     unsigned int        largestInputLayer;  /// the widest layer that provides input to a subsequent layer (i.e. ever layer exept the output layer)
 
-    cl_float			trainingLearningRate;
-    cl_float			trainingMomentum;
+    cl_float			clLearningRate;
+    cl_float			clTrainingMomentum;
 
 	// house keeping
 	bool				hasChanged;					// set to true after randomisaton or training

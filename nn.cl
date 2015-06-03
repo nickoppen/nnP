@@ -16,6 +16,7 @@
 void forwardPass(   float * g_inVals,
                     float * g_nodeBiases,
                     float * g_weights,
+                    float * wgt,
                     float * derived,
                     int   * widths,
                     int * finalFirstNode,
@@ -41,7 +42,6 @@ void forwardPass(   float * g_inVals,
 
     /// local storage
 //    __private int   widths[] = INITWIDTHARRAY;
-    __private float wgt[MAXWEIGHTTOLAYER];
     __private float biases[LARGESTDERIVEDLAYER];
     __private float in[LARGESTINPUTLAYER];
 
@@ -147,8 +147,9 @@ __kernel void k_forward(    __global float * g_inVals,         /// incoming: the
     int n;
 
     __private float derived[LARGESTDERIVEDLAYER];
+    __private float wgt[MAXWEIGHTTOLAYER];                  /// space for local storage of weights ... is filled by the forward pass and used later to train
 
-    forwardPass(g_inVals, g_nodeBiases, g_weights, derived, widths, &finalFirstNode, &finalLastNode, debug);
+    forwardPass(g_inVals, g_nodeBiases, g_weights, wgt, derived, widths, &finalFirstNode, &finalLastNode, debug);
 
     for(n=finalFirstNode; n<finalLastNode; n++)
         g_outVals[n] = derived[n];        /// put the last derived vector into g_outVals for transmission to the host
@@ -164,17 +165,24 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
                           __global float * g_nodeBiases,      /// incoming: g_nodeBiases all in one big array
                           __global float * g_weights,         /// incoming: g_weights for all layers in one big array
                           __global float * g_error,          /// outgoing: the cumulative differentials between the actual output and the deisred output
+                          __global float   learningRate,
                           __global float * debug)
 {
     int finalFirstNode, finalLastNode;
-    int n;
+    int n, w;
+    int layer;                                          /// counts from n to 1
+    int prevLayerWidth, firstWeight, lastWeight;
+    int d = 0;
+    int gid = get_global_id(0);
 
     __private int   widths[] = INITWIDTHARRAY;
     __private float derived[LARGESTDERIVEDLAYER];        // could restrict this to the width of the output layer
     __private float delta[LARGESTDERIVEDLAYER];        // could restrict this to the width of the output layer
     __private float outputError[LARGESTDERIVEDLAYER];       ///
+    __private float wgt[MAXWEIGHTTOLAYER];                  /// space for local storage of weights ... is filled by the forward pass and used later to train
 
-    forwardPass(g_inVals, g_nodeBiases, g_weights, derived, widths, &finalFirstNode, &finalLastNode, debug);
+
+    forwardPass(g_inVals, g_nodeBiases, g_weights, wgt, derived, widths, &finalFirstNode, &finalLastNode, debug);
 
     /// calculate the deltas
     for (n = finalFirstNode; n < finalLastNode; n++)
@@ -187,9 +195,30 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
     /// calculate the weight update delta for each output node
     for(n = finalFirstNode; n < finalLastNode; n++)
     {
-        delta[n] = derived[n] * (1 - derived[n]) * outputError[n];
-        debug[n] = delta[n];        // just checking
+        delta[n] = derived[n] * (1 - derived[n]) * outputError[n];      /// first derivative of the sigmoid function [Read and Marks pg65]
     }
+
+    /// online learning for now
+    layer = OUTPUTLAYER;
+    prevLayerWidth = widths[layer - 1];
+    firstWeight = 0;                            /// only the g_weights relevant to thse nodes have been copied into local memory
+    lastWeight = prevLayerWidth;               /// check boundry condition on the very last weight into the output layer
+    for (n = finalFirstNode; n < finalLastNode; n++)
+    {
+        for (w=firstWeight; w<lastWeight; w++)
+        {
+            wgt[w] += learningRate * delta[n] * derived[n];
+            if(gid == 0)
+                debug[d++] = wgt[w];
+        }
+        debug[d++] = 1000;
+        // update the node bias
+
+        //
+        firstWeight = lastWeight;
+        lastWeight += prevLayerWidth;
+    }
+
 
 
 }
