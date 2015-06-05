@@ -15,6 +15,7 @@
 
 void forwardPass(   float * g_inVals,
                     float * g_nodeBiases,
+                    float * biases,
                     float * g_weights,
                     float * wgt,
                     float * derived,
@@ -42,7 +43,6 @@ void forwardPass(   float * g_inVals,
 
     /// local storage
 //    __private int   widths[] = INITWIDTHARRAY;
-    __private float biases[LARGESTDERIVEDLAYER];
     __private float in[LARGESTINPUTLAYER];
 
     for(layer = 1; layer<LAYERCOUNT; layer++)
@@ -148,8 +148,10 @@ __kernel void k_forward(    __global float * g_inVals,         /// incoming: the
 
     __private float derived[LARGESTDERIVEDLAYER];
     __private float wgt[MAXWEIGHTTOLAYER];                  /// space for local storage of weights ... is filled by the forward pass and used later to train
+    __private float biases[LARGESTDERIVEDLAYER];
 
-    forwardPass(g_inVals, g_nodeBiases, g_weights, wgt, derived, widths, &finalFirstNode, &finalLastNode, debug);
+
+    forwardPass(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, &finalFirstNode, &finalLastNode, debug);
 
     for(n=finalFirstNode; n<finalLastNode; n++)
         g_outVals[n] = derived[n];        /// put the last derived vector into g_outVals for transmission to the host
@@ -180,9 +182,10 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
     __private float delta[LARGESTDERIVEDLAYER];        // could restrict this to the width of the output layer
     __private float outputError[LARGESTDERIVEDLAYER];       ///
     __private float wgt[MAXWEIGHTTOLAYER];                  /// space for local storage of weights ... is filled by the forward pass and used later to train
+    __private float biases[LARGESTDERIVEDLAYER];
 
 
-    forwardPass(g_inVals, g_nodeBiases, g_weights, wgt, derived, widths, &finalFirstNode, &finalLastNode, debug);
+    forwardPass(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, &finalFirstNode, &finalLastNode, debug);
 
     /// calculate the deltas
     for (n = finalFirstNode; n < finalLastNode; n++)
@@ -211,8 +214,15 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
             if(gid == 0)
                 debug[d++] = wgt[w];
         }
-        debug[d++] = 1000;
+        if(gid == 0)
+            debug[d++] = 1000;
         // update the node bias
+        biases[n] += learningRate * outputError[n];
+        if(gid == 0)
+        {
+            debug[d++] = biases[n];
+            debug[d++] = 1000;
+        }
 
         //
         firstWeight = lastWeight;
