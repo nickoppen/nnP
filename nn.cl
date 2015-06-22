@@ -173,9 +173,11 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
     int finalFirstNode, finalLastNode;
     int n, w;
     int layer;                                          /// counts from n to 1
-    int prevLayerWidth, firstWeight, lastWeight;
-    int d = 0;
+    int curLayerWidth, prevLayerWidth, firstWeight, lastWeight;
+    int outboundNodesCoreGid;
+    int destNodesPerCore, destNodesModulus;
     int gid = get_global_id(0);
+    int d = 0;
 
     __private int   widths[] = INITWIDTHARRAY;
     __private float derived[LARGESTDERIVEDLAYER];        // could restrict this to the width of the output layer
@@ -183,15 +185,17 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
     __private float outputError[LARGESTDERIVEDLAYER];       ///
     __private float wgt[MAXWEIGHTTOLAYER];                  /// space for local storage of weights ... is filled by the forward pass and used later to train
     __private float biases[LARGESTDERIVEDLAYER];
+    __private float linkErrors[MAXWEIGHTTOLAYER];           /// SPACE FOR EACH CORE TO SEND THE PREVIOUS LAYER'S OUTBOUND LINK ERRORS
 
+    unsigned int core[] = {core00, core01, core02, core03, core10, core11, core12, core13, core20, core21, core22, core23, core30, core31, core32, core33};
 
     forwardPass(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, &finalFirstNode, &finalLastNode, debug);
 
-    /// calculate the deltas
+    /// calculate the OUTPUT layer error
     for (n = finalFirstNode; n < finalLastNode; n++)
         outputError[n] = g_desiredVals[n] - derived[n];      /// width of desired == width outputlayer
 
-    /// passs the final deltas back
+    /// pass the final deltas back
     for(n = finalFirstNode; n < finalLastNode; n++)
         g_error[n] = outputError[n];
 
@@ -204,25 +208,38 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
     /// online learning for now
     layer = OUTPUTLAYER;
     prevLayerWidth = widths[layer - 1];
+    curLayerWidth = widths[layer];
     firstWeight = 0;                            /// only the g_weights relevant to thse nodes have been copied into local memory
     lastWeight = prevLayerWidth;               /// check boundry condition on the very last weight into the output layer
+    destNodesPerCore = prevLayerWidth / CORECOUNT;                   /// all cores get this many
+    destNodesModulus = prevLayerWidth % CORECOUNT;                   /// the remainder are assigned one per node starting from gid == 0
+    outboundNodesCoreGid = 0;
+
+    d = gid * (prevLayerWidth + 3) * (finalLastNode - finalFirstNode);      // DEBUG
     for (n = finalFirstNode; n < finalLastNode; n++)
     {
         for (w=firstWeight; w<lastWeight; w++)
         {
-            wgt[w] += learningRate * delta[n] * derived[n];
-            if(gid == 0)
+            wgt[w] -= learningRate * delta[n] * derived[n];
+            /// pass delta * weight to previous layer
+            if (outboundNodesCoreGid < destNodesModulus)        // relies on the observation that the first method will work for the first weight sent to the first core without an extra node will still work
+                outboundNodesCoreGid = (int)floor((float)(w/(destNodesPerCore + 1)));
+            else
+                outboundNodesCoreGid = (int)(CORECOUNT - ceil((float)(((prevLayerWidth + 1) - w) / destNodesPerCore)));
+
+            *(float *)NEIGHBOUR_LOC(core[outboundNodesCoreGid], linkErrors, w, (sizeof(float))) = (delta[n] * wgt[w]);  /// <<<<<<<<<<<<<<< w is not correct
+            //            if(gid == 0)
                 debug[d++] = wgt[w];
         }
-        if(gid == 0)
+//        if(gid == 0)
             debug[d++] = 1000;
         // update the node bias
-        biases[n] += learningRate * outputError[n];
-        if(gid == 0)
-        {
+        biases[n] -= learningRate * outputError[n];
+//        if(gid == 0)
+//        {
             debug[d++] = biases[n];
             debug[d++] = 1000;
-        }
+//        }
 
         //
         firstWeight = lastWeight;
