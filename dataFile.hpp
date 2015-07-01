@@ -123,14 +123,14 @@ private:
 	{
 		std::string::size_type bracketPos;
 		string verb = "";
-		string arguements = "";
+		string arguments = "";
 		status_t decodeResult;
 
 		bracketPos = strLine->find('(', 0);
 		if (bracketPos == std::string::npos)
 			throw format_Error(ENN_ERR_NON_FILE);
 
-		if (verbArguement(strLine, verb, arguements))
+		if (verbArguement(strLine, verb, arguments))
 		{
 			if (verb == "inputVector")
 			{
@@ -138,7 +138,7 @@ private:
 				cout << "Decoding Input Vector\n";
 #endif
 
-				return decodeInputVector(&arguements);
+				return decodeInputVector(&arguments);
 			}
 			if (verb == "networkTopology")
 			{
@@ -147,7 +147,7 @@ private:
 #endif
 
 				vector<unsigned int> layerWidths(maxLayers);
-				decodeResult = decodeNetworkTopology(&arguements, maxLayers, &layerWidths);
+				decodeResult = decodeNetworkTopology(&arguments, maxLayers, &layerWidths);
 				if (layerWidths[0] != ((nn*) theNetwork)->layerZeroWidth())
 					throw format_Error(ENN_ERR_NONMATCHING_TOPOLOGY);
 
@@ -248,14 +248,14 @@ private:
 	{
 		std::string::size_type bracketPos;
 		string verb = "";
-		string arguements = "";
+		string arguments = "";
 		status_t decodeResult;
 
 		bracketPos = strLine->find('(', 0);
 		if (bracketPos == std::string::npos)
 			throw format_Error(ENN_ERR_NON_FILE);
 
-		if (verbArguement(strLine, verb, arguements))
+		if (verbArguement(strLine, verb, arguments))
 		{
 			if (verb == "networkTopology")
 			{
@@ -263,7 +263,7 @@ private:
 				cout << "Decode Topology\n";
 #endif
 				vector<unsigned int> layerWidths(maxLayers);
-				decodeResult = decodeNetworkTopology(&arguements, maxLayers, &layerWidths);
+				decodeResult = decodeNetworkTopology(&arguments, maxLayers, &layerWidths);
 				if ((layerWidths[0] == ((nn*) theNetwork)->layerZeroWidth())
 						&& (layerWidths[3] == ((nn*) theNetwork)->layerNWidth()))
 					return decodeResult;
@@ -278,7 +278,7 @@ private:
 				cout << "Decode Input/Output Vector\n";
 #endif
 
-				return decodeTrainingVector(&arguements);
+				return decodeTrainingVector(&arguments);
 			}
 			errMessage = ENN_ERR_UNK_KEY_WORD;
 			errMessage += ": ";
