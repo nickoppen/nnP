@@ -174,7 +174,7 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
     int n, w;
     int layer;                                          /// counts from n to 1
     int curLayerWidth, prevLayerWidth, firstWeight, lastWeight;
-    int outboundNodesCoreGid;
+//    int outboundNodesCoreGid;
     int destNodesPerCore, destNodesModulus;
     int gid = get_global_id(0);
     int d = 0;
@@ -185,7 +185,8 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
     __private float outputError[LARGESTDERIVEDLAYER];       ///
     __private float wgt[MAXWEIGHTTOLAYER];                  /// space for local storage of weights ... is filled by the forward pass and used later to train
     __private float biases[LARGESTDERIVEDLAYER];
-    __private float linkErrors[MAXWEIGHTTOLAYER];           /// SPACE FOR EACH CORE TO SEND THE PREVIOUS LAYER'S OUTBOUND LINK ERRORS
+//    __private float linkErrors[MAXWEIGHTTOLAYER];           /// SPACE FOR EACH CORE TO SEND THE PREVIOUS LAYER'S OUTBOUND LINK ERRORS
+    __global float linkErrors[MAXWEIGHTTOLAYER];           /// SPACE FOR EACH CORE TO SEND THE PREVIOUS LAYER'S OUTBOUND LINK ERRORS
 
     unsigned int core[] = {core00, core01, core02, core03, core10, core11, core12, core13, core20, core21, core22, core23, core30, core31, core32, core33};
 
@@ -213,39 +214,46 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
     lastWeight = prevLayerWidth;               /// check boundry condition on the very last weight into the output layer
     destNodesPerCore = prevLayerWidth / CORECOUNT;                   /// all cores get this many
     destNodesModulus = prevLayerWidth % CORECOUNT;                   /// the remainder are assigned one per node starting from gid == 0
-    outboundNodesCoreGid = 0;
+//    outboundNodesCoreGid = 0;
 
-    d = gid * (prevLayerWidth + 3) * (finalLastNode - finalFirstNode);      // DEBUG
+//    d = gid * (prevLayerWidth + 3) * (finalLastNode - finalFirstNode);      // DEBUG
     for (n = finalFirstNode; n < finalLastNode; n++)
     {
         for (w=firstWeight; w<lastWeight; w++)
         {
             wgt[w] -= learningRate * delta[n] * derived[n];
+
+/* This bit is to send the weight errors directly to the owning node in the previous layer
+// remove when linkError are nnot __global
             /// pass delta * weight to previous layer
             if (outboundNodesCoreGid < destNodesModulus)        // relies on the observation that the first method will work for the first weight sent to the first core without an extra node will still work
                 outboundNodesCoreGid = (int)floor((float)(w/(destNodesPerCore + 1)));
             else
                 outboundNodesCoreGid = (int)(CORECOUNT - ceil((float)(((prevLayerWidth + 1) - w) / destNodesPerCore)));
 
-            *(float *)NEIGHBOUR_LOC(core[outboundNodesCoreGid], linkErrors, w, (sizeof(float))) = (delta[n] * wgt[w]);  /// <<<<<<<<<<<<<<< w is not correct
-            //            if(gid == 0)
-                debug[d++] = wgt[w];
+            *(float *)NEIGHBOUR_LOC(core[outboundNodesCoreGid], linkErrors, (w), (sizeof(float))) = (delta[n] * wgt[w]);  /// <<<<<<<<<<<<<<< w is not correct
+//            if(gid == 0)
+//                debug[d++] = wgt[w];
+*/
+ //               linkErrors[(n * curLayerWidth) + w] = (delta[n] * wgt[w]);
+            debug[(n * curLayerWidth) + w] = (delta[n] * wgt[w]);
         }
-//        if(gid == 0)
-            debug[d++] = 1000;
-        // update the node bias
-        biases[n] -= learningRate * outputError[n];
-//        if(gid == 0)
-//        {
-            debug[d++] = biases[n];
-            debug[d++] = 1000;
-//        }
 
-        //
+        /// update the node bias
+        biases[n] -= learningRate * outputError[n];
+
         firstWeight = lastWeight;
         lastWeight += prevLayerWidth;
     }
+    barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);        /// pause for every core to catch up before going onto the next layer
 
-
+//    if(gid == 15)
+//        for(n = 0; n < prevLayerWidth; n++)
+//        {
+//            for(w = 0; w < curLayerWidth; w++)
+//                debug[d++] = linkErrors[(n*curLayerWidth)+w];
+//            debug[d++] = 1000;
+//        }
+//    barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);        /// everyone wait til 15 is done
 
 }
