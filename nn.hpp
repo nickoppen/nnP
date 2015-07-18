@@ -342,7 +342,7 @@ class nn
 
                                 openHandle = clopen(pCon, 0, CLLD_NOW);                  /// linked in version - the elf file must be linked into the executable at link time
 
-///                                writeDefsFile();
+                                writeDefsFile();
 ///                                openHandle = clopen(pCon, PATHTOKERNALFILE, CLLD_NOW);      /// JIT compile from file version
 
     ///                            appendDefsToKernalString(); //TODO
@@ -804,11 +804,13 @@ class nn
                 largestDerivedLayer = 0;
                 largestInputLayer = (*layerWidths)[0];
                 maxWeightToLayer = 0;
+                totalDerivedNodes = 0;
                 for (i=1; i < layerCount; i++)
                 {
                     totalWeights += (*layerWidths)[i] * (*layerWidths)[i-1];
                     nodeBiasArraySize += (*layerWidths)[i];
                     largestDerivedLayer = (largestDerivedLayer < (*layerWidths)[i]) ? (*layerWidths)[i] : largestDerivedLayer;
+                    totalDerivedNodes += (*layerWidths)[i];
                     largestInputLayer = ((largestInputLayer < (*layerWidths)[i]) && (i != (layerCount - 1))) ? (*layerWidths)[i] : largestInputLayer;
                     maxWeightToLayer = (maxWeightToLayer < ((*layerWidths)[i] * (*layerWidths)[i-1])) ? ((*layerWidths)[i] * (*layerWidths)[i-1]) : maxWeightToLayer;
                 }
@@ -986,6 +988,7 @@ class nn
 					(*pFile) << "#define MAXWEIGHTTOLAYER " << maxWeightToLayer << "\n";
 					(*pFile) << "#define LARGESTDERIVEDLAYER " << largestDerivedLayer << "\n";
 					(*pFile) << "#define LARGESTINPUTLAYER " << largestInputLayer << "\n";
+					(*pFile) << "#define TOTALDERIVEDNODES " << totalDerivedNodes << "\n";
 					(*pFile) << "#define INITWIDTHARRAY {";
 					for (i=0; i<layerCount-1; i++)
                         (*pFile) << (*layers)[i].nodeCount << ",";
@@ -1018,6 +1021,7 @@ class nn
     unsigned int        nodeBiasArraySize;  /// the sum of all of the layer widths - the minimum size of an array that can fit all nodes
     unsigned int        largestDerivedLayer;/// the widest layer not including the input layer
     unsigned int        largestInputLayer;  /// the widest layer that provides input to a subsequent layer (i.e. ever layer exept the output layer)
+    unsigned int        totalDerivedNodes;  /// the number of derived nodes in the whole network
 
     cl_float			clLearningRate;
     cl_float			clTrainingMomentum;

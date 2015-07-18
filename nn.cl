@@ -11,7 +11,8 @@
 ///#define MAXWEIGHTTOLAYER 1024
 ///#define LARGESTDERIVEDLAYER 32
 ///#define LARGESTINPUTLAYER 32          // max of all the layers that feed into other layers
-///#define INITWIDTHARRAY {32,32,16,16}/
+///#define TOTALDERIVEDNODES 58  /// the sum of the nodes from layer 1 onwards
+///#define INITWIDTHARRAY {32,32,16,16}
 
 void forwardPass(   float * g_inVals,
                     float * g_nodeBiases,
@@ -44,6 +45,10 @@ void forwardPass(   float * g_inVals,
     /// local storage
 //    __private int   widths[] = INITWIDTHARRAY;
     __private float in[LARGESTINPUTLAYER];
+
+    if(gid==0)
+        for (i=0;i<TOTALDERIVEDNODES;i++)
+            debug[i] = 0;
 
     for(layer = 1; layer<LAYERCOUNT; layer++)
     {
@@ -85,14 +90,13 @@ void forwardPass(   float * g_inVals,
 //            derived[i]= (float)1.0;
 
         ///memcopy(..);
-        n = localFirstNode;
-        for (i=firstNode; i<lastNode; i++)
-            biases[n++] = g_nodeBiases[i];              /// allocate enough space for a whole bias vector in the layer but only copy the one this core needs
+        for (n = firstNode; n < lastNode; n++)
+            biases[n] = g_nodeBiases[n];              /// allocate enough space for a whole bias vector in the layer but only copy the one this core needs
 
 
         firstWeight = 0;                            /// only the g_weights relevant to thse nodes have been copied into local memory
         lastWeight = prevLayerWidth;               /// check boundry condition on the very last weight into the output layer
-        for (n=localFirstNode; n<localLastNode; n++)
+        for (n = firstNode; n < lastNode; n++)
         {
             activationQuant = 0.0;
             i=0;                                    /// i is the index into the input vector which starts for 0 for every node;
@@ -113,7 +117,7 @@ void forwardPass(   float * g_inVals,
             for (coreI = 0; coreI < CORECOUNT; coreI++)
             {
                 if (core[coreI] != localCoreId)
-                    for (n=localFirstNode; n < localLastNode; n++)
+                    for (n=firstNode; n < lastNode; n++)
                         *(float *)NEIGHBOUR_LOC(core[coreI], derived,  n, (sizeof(float))) = derived[n];
 
             }
@@ -125,8 +129,12 @@ void forwardPass(   float * g_inVals,
         }
         else
         {
-            *finalFirstNode = localFirstNode;    /// remember where we are before returning
-            *finalLastNode = localLastNode;
+            *finalFirstNode = firstNode;    /// remember where we are before returning
+            *finalLastNode = lastNode;
+
+            if (gid==0)
+                for (i=0;i<TOTALDERIVEDNODES;i++)
+                    debug[i] = derived[i];
         }
     }
 }
@@ -144,17 +152,19 @@ __kernel void k_forward(    __global float * g_inVals,         /// incoming: the
 {
     __private int   widths[] = INITWIDTHARRAY;
     int finalFirstNode, finalLastNode;
-    int n;
+    int n0, n;
 
-    __private float derived[LARGESTDERIVEDLAYER];
+    __private float derived[TOTALDERIVEDNODES];  /// replace with sum of derived layers
     __private float wgt[MAXWEIGHTTOLAYER];                  /// space for local storage of weights ... is filled by the forward pass and used later to train
-    __private float biases[LARGESTDERIVEDLAYER];
+    __private float biases[TOTALDERIVEDNODES];
 
 
     forwardPass(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, &finalFirstNode, &finalLastNode, debug);
 
+    n0 = 0;
     for(n=finalFirstNode; n<finalLastNode; n++)
-        g_outVals[n] = derived[n];        /// put the last derived vector into g_outVals for transmission to the host
+        g_outVals[n0++] = derived[n];        /// put the last derived vector into g_outVals for transmission to the host
+
 }
 
 ///======================================================================================================================
@@ -170,90 +180,103 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
                           __global float   learningRate,
                           __global float * debug)
 {
-    int finalFirstNode, finalLastNode;
+    int firstNode, lastNode, localFirstNode, localLastNode;
     int n, w;
     int layer;                                          /// counts from n to 1
-    int curLayerWidth, prevLayerWidth, firstWeight, lastWeight;
+    int curLayerWidth, nextLayerWidth, prevLayerWidth, firstWeight, lastWeight;
 //    int outboundNodesCoreGid;
     int destNodesPerCore, destNodesModulus;
+    int nodeIndexOffset = 0;
+    int wgtIndexOffset = 0;
     int gid = get_global_id(0);
     int d = 0;
 
     __private int   widths[] = INITWIDTHARRAY;
-    __private float derived[LARGESTDERIVEDLAYER];        // could restrict this to the width of the output layer
+    __private float derived[TOTALDERIVEDNODES];        // could restrict this to the width of the output layer
     __private float delta[LARGESTDERIVEDLAYER];        // could restrict this to the width of the output layer
     __private float outputError[LARGESTDERIVEDLAYER];       ///
     __private float wgt[MAXWEIGHTTOLAYER];                  /// space for local storage of weights ... is filled by the forward pass and used later to train
-    __private float biases[LARGESTDERIVEDLAYER];
-//    __private float linkErrors[MAXWEIGHTTOLAYER];           /// SPACE FOR EACH CORE TO SEND THE PREVIOUS LAYER'S OUTBOUND LINK ERRORS
-    __global float linkErrors[MAXWEIGHTTOLAYER];           /// SPACE FOR EACH CORE TO SEND THE PREVIOUS LAYER'S OUTBOUND LINK ERRORS
+    __private float biases[TOTALDERIVEDNODES];
+//    __private float linkErrors[MAXWEIGHTTOLAYER];           /// SPACE FOR EACH CORE TO SEND THE PREVIOUS LAYER'S OUTBOUND LINK ERRORS // using debug[] for now
 
     unsigned int core[] = {core00, core01, core02, core03, core10, core11, core12, core13, core20, core21, core22, core23, core30, core31, core32, core33};
 
-    forwardPass(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, &finalFirstNode, &finalLastNode, debug);
+    forwardPass(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, &localFirstNode, &localLastNode, debug);
 
-    /// calculate the OUTPUT layer error
-    for (n = finalFirstNode; n < finalLastNode; n++)
-        outputError[n] = g_desiredVals[n] - derived[n];      /// width of desired == width outputlayer
-
-    /// pass the final deltas back
-    for(n = finalFirstNode; n < finalLastNode; n++)
-        g_error[n] = outputError[n];
-
-    /// calculate the weight update delta for each output node
-    for(n = finalFirstNode; n < finalLastNode; n++)
-    {
-        delta[n] = derived[n] * (1 - derived[n]) * outputError[n];      /// first derivative of the sigmoid function [Read and Marks pg65]
-    }
-
-    /// online learning for now
-    layer = OUTPUTLAYER;
-    prevLayerWidth = widths[layer - 1];
-    curLayerWidth = widths[layer];
-    firstWeight = 0;                            /// only the g_weights relevant to thse nodes have been copied into local memory
-    lastWeight = prevLayerWidth;               /// check boundry condition on the very last weight into the output layer
     destNodesPerCore = prevLayerWidth / CORECOUNT;                   /// all cores get this many
     destNodesModulus = prevLayerWidth % CORECOUNT;                   /// the remainder are assigned one per node starting from gid == 0
-//    outboundNodesCoreGid = 0;
 
-//    d = gid * (prevLayerWidth + 3) * (finalLastNode - finalFirstNode);      // DEBUG
-    for (n = finalFirstNode; n < finalLastNode; n++)
+    for (layer = OUTPUTLAYER; layer > 0; layer--)
     {
-        for (w=firstWeight; w<lastWeight; w++)
+        if (layer == OUTPUTLAYER)
         {
-            wgt[w] -= learningRate * delta[n] * derived[n];
+            /// calculate the OUTPUT layer error
+            for (n = localFirstNode; n < localLastNode; n++)
+                outputError[n] = g_desiredVals[n] - derived[n];      /// width of desired == width outputlayer
 
-/* This bit is to send the weight errors directly to the owning node in the previous layer
-// remove when linkError are nnot __global
-            /// pass delta * weight to previous layer
-            if (outboundNodesCoreGid < destNodesModulus)        // relies on the observation that the first method will work for the first weight sent to the first core without an extra node will still work
-                outboundNodesCoreGid = (int)floor((float)(w/(destNodesPerCore + 1)));
-            else
-                outboundNodesCoreGid = (int)(CORECOUNT - ceil((float)(((prevLayerWidth + 1) - w) / destNodesPerCore)));
+            /// pass the final deltas back
+            for(n = localFirstNode; n < localLastNode; n++)
+                g_error[n] = outputError[n];
 
-            *(float *)NEIGHBOUR_LOC(core[outboundNodesCoreGid], linkErrors, (w), (sizeof(float))) = (delta[n] * wgt[w]);  /// <<<<<<<<<<<<<<< w is not correct
-//            if(gid == 0)
-//                debug[d++] = wgt[w];
-*/
- //               linkErrors[(n * curLayerWidth) + w] = (delta[n] * wgt[w]);
-            debug[(n * curLayerWidth) + w] = (delta[n] * wgt[w]);
+            /// calculate the weight update delta for each output node
+            for(n = localFirstNode; n < localLastNode; n++)
+                delta[n] = derived[n] * (1 - derived[n]) * outputError[n];      /// first derivative of the sigmoid function [Read and Marks pg65]
+        }
+        else
+        {
+            firstNode = nodeIndexOffset + ((gid * destNodesPerCore) + min(gid, destNodesModulus)); /// all node biases are in one big array so nodeIndexOffset records where the current layer starts
+            lastNode = firstNode + destNodesPerCore + ((gid < destNodesModulus) ? 1 : 0);
+            localFirstNode = firstNode - nodeIndexOffset;                   /// firstNode - nodeIndexOffset is the node index within the current  layer
+            localLastNode = lastNode - nodeIndexOffset;                     /// localFirstNode and localLastNode align with the derived value array
+
+            for (n = localFirstNode; n < localLastNode; n++)    // not sure about this
+            {
+                outputError[n] = 0;
+                for (w = 0; w < nextLayerWidth; w++)
+                    outputError[n] += debug[w];
+            }
+
+            for(n = localFirstNode; n < localLastNode; n++)
+                delta[n] = derived[n] * (1 - derived[n]) * outputError[n];      /// What here?
         }
 
-        /// update the node bias
-        biases[n] -= learningRate * outputError[n];
+        /// online learning for now
+        prevLayerWidth = widths[layer - 1];
+        curLayerWidth = widths[layer];
+        firstWeight = -00;                              /// update the __global g_weights array for now
+        lastWeight = prevLayerWidth;               /// check boundry condition on the very last weight into the output layer
+    //    outboundNodesCoreGid = 0;
 
-        firstWeight = lastWeight;
-        lastWeight += prevLayerWidth;
+    //    d = gid * (prevLayerWidth + 3) * (finalLastNode - finalFirstNode);      // DEBUG
+        for (n = localFirstNode; n < localLastNode; n++)
+        {
+            for (w=firstWeight; w<lastWeight; w++)
+            {
+                //wgt[w] -= learningRate * delta[n] * derived[n];
+                g_weights[w] -= learningRate * delta[n] * derived[n];       /// update the global weight array for now
+
+    /* This bit is to send the weight errors directly to the owning node in the previous layer
+                /// pass delta * weight to previous layer
+                if (outboundNodesCoreGid < destNodesModulus)        // relies on the observation that the first method will work for the first weight sent to the first core without an extra node will still work
+                    outboundNodesCoreGid = (int)floor((float)(w/(destNodesPerCore + 1)));
+                else
+                    outboundNodesCoreGid = (int)(CORECOUNT - ceil((float)(((prevLayerWidth + 1) - w) / destNodesPerCore)));
+
+                *(float *)NEIGHBOUR_LOC(core[outboundNodesCoreGid], linkErrors, (w), (sizeof(float))) = (delta[n] * wgt[w]);  /// <<<<<<<<<<<<<<< w is not correct
+    //            if(gid == 0)
+    //                debug[d++] = wgt[w];
+    */
+     //               linkErrors[(n * curLayerWidth) + w] = (delta[n] * wgt[w]);
+                /// Use Debug to communication between cores for now
+                debug[(n * curLayerWidth) + w] = (delta[n] * wgt[w]);
+            }
+
+            /// update the node bias
+            biases[n] -= learningRate * outputError[n];
+
+            firstWeight = lastWeight;
+            lastWeight += prevLayerWidth;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);        /// pause for every core to catch up before going onto the next layer
     }
-    barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);        /// pause for every core to catch up before going onto the next layer
-
-//    if(gid == 15)
-//        for(n = 0; n < prevLayerWidth; n++)
-//        {
-//            for(w = 0; w < curLayerWidth; w++)
-//                debug[d++] = linkErrors[(n*curLayerWidth)+w];
-//            debug[d++] = 1000;
-//        }
-//    barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);        /// everyone wait til 15 is done
-
 }
