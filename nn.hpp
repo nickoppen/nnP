@@ -222,6 +222,7 @@ class nn
                                 filebuf fbuf;
                                 fbuf.open(".//nn.csv", std::ios::out);
                                 ostream fout(&fbuf);
+                                fout.precision(12);
 
                                 while ((clDebug[i] > -999) && (i<2048))
                                 {
@@ -387,6 +388,7 @@ class nn
                                     filebuf fbuf;
                                     fbuf.open(".//nn.csv", std::ios::out);
                                     ostream fout(&fbuf);
+                                    fout.precision(12);
 
                                     while ((clDebug[i] > -999) && (i<2048))
                                     {

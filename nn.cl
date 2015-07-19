@@ -111,8 +111,8 @@ void forwardPass(   float * g_inVals,
             lastWeight += prevLayerWidth;
         }
 
-        if (layer < OUTPUTLAYER)
-        {
+//        if (layer < OUTPUTLAYER)
+//        {
             /// transmit the node values calculated here to all other cores.
             for (coreI = 0; coreI < CORECOUNT; coreI++)
             {
@@ -126,9 +126,10 @@ void forwardPass(   float * g_inVals,
 
             nodeIndexOffset += curLayerWidth; /// the length of the node bias array is the sum of the layer widths
             wgtIndexOffset += curLayerWidth * prevLayerWidth;
-        }
-        else
-        {
+ //       }
+ //       else
+         if (layer == OUTPUTLAYER)
+       {
             *finalFirstNode = firstNode;    /// remember where we are before returning
             *finalLastNode = lastNode;
 
@@ -161,9 +162,10 @@ __kernel void k_forward(    __global float * g_inVals,         /// incoming: the
 
     forwardPass(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, &finalFirstNode, &finalLastNode, debug);
 
-    n0 = 0;
+    n0 = finalFirstNode - (TOTALDERIVEDNODES - widths[OUTPUTLAYER]);
     for(n=finalFirstNode; n<finalLastNode; n++)
         g_outVals[n0++] = derived[n];        /// put the last derived vector into g_outVals for transmission to the host
+
 
 }
 
