@@ -14,6 +14,14 @@
 ///#define TOTALDERIVEDNODES 58  /// the sum of the nodes from layer 1 onwards
 ///#define INITWIDTHARRAY {32,32,16,16}
 
+typedef struct
+{
+    int firstNode;
+    int lastNode;
+    int firstWieght;
+    int lastWieght;
+}   idx;
+
 void forwardPass(   float * g_inVals,
                     float * g_nodeBiases,
                     float * biases,
@@ -21,15 +29,13 @@ void forwardPass(   float * g_inVals,
                     float * wgt,
                     float * derived,
                     int   * widths,
-                    int * finalFirstNode,
-                    int * finalLastNode,
+                    idx * coreIndex,
            __global float * debug)
 {
     int n, i, w;            /// node, input, weight
     int d = 0;              /// debug
     int gid = get_global_id(0);
     int layer;
-    int firstNode, lastNode;                /// the index of the first and last nodes in the __global node array
     int localFirstNode, localLastNode;      /// the  index of the first and last nodes in the current layer
     int firstWeight, lastWeight;
     int nodeIndexOffset = 0;
@@ -58,12 +64,12 @@ void forwardPass(   float * g_inVals,
         destNodesPerCore = curLayerWidth / CORECOUNT;                   /// all cores get this many
         destNodesModulus = curLayerWidth % CORECOUNT;                   /// the remainder are assigned one per node starting from gid == 0
 
-        firstNode = nodeIndexOffset + ((gid * destNodesPerCore) + min(gid, destNodesModulus)); /// all node biases are in one big array so nodeIndexOffset records where the current layer starts
-        lastNode = firstNode + destNodesPerCore + ((gid < destNodesModulus) ? 1 : 0);
-        localFirstNode = firstNode - nodeIndexOffset;                   /// firstNode - nodeIndexOffset is the node index within the current  layer
-        localLastNode = lastNode - nodeIndexOffset;                     /// localFirstNode and localLastNode align with the derived value array
+        coreIndex[layer].firstNode = nodeIndexOffset + ((gid * destNodesPerCore) + min(gid, destNodesModulus)); /// all node biases are in one big array so nodeIndexOffset records where the current layer starts
+        coreIndex[layer].lastNode = coreIndex[layer].firstNode + destNodesPerCore + ((gid < destNodesModulus) ? 1 : 0);
+        localFirstNode = coreIndex[layer].firstNode - nodeIndexOffset;                   /// firstNode - nodeIndexOffset is the node index within the current  layer
+        localLastNode = coreIndex[layer].lastNode - nodeIndexOffset;                     /// localFirstNode and localLastNode align with the derived value array
         firstWeight = wgtIndexOffset + (localFirstNode * prevLayerWidth);
-        lastWeight = firstWeight + ((lastNode - firstNode) * prevLayerWidth);
+        lastWeight = firstWeight + ((localLastNode - localFirstNode) * prevLayerWidth);
 
       ///memcopy(...);     /// only copy in the g_weights that are needed for this node
         w=0;
@@ -93,13 +99,13 @@ void forwardPass(   float * g_inVals,
 //            derived[i]= (float)1.0;
 
         ///memcopy(..);
-        for (n = firstNode; n < lastNode; n++)
+        for (n = coreIndex[layer].firstNode; n < coreIndex[layer].lastNode; n++)
             biases[n] = g_nodeBiases[n];              /// allocate enough space for a whole bias vector in the layer but only copy the one this core needs
 
 
         firstWeight = 0;                            /// only the g_weights relevant to thse nodes have been copied into local memory
         lastWeight = prevLayerWidth;               /// check boundry condition on the very last weight into the output layer
-        for (n = firstNode; n < lastNode; n++)
+        for (n = coreIndex[layer].firstNode; n < coreIndex[layer].lastNode; n++)
         {
             activationQuant = 0.0;
             i=0;                                    /// i is the index into the input vector which starts for 0 for every node;
@@ -120,7 +126,7 @@ void forwardPass(   float * g_inVals,
             for (coreI = 0; coreI < CORECOUNT; coreI++)
             {
                 if (core[coreI] != localCoreId)
-                    for (n=firstNode; n < lastNode; n++)
+                    for (n=coreIndex[layer].firstNode; n < coreIndex[layer].lastNode; n++)
                         *(float *)NEIGHBOUR_LOC(core[coreI], derived,  n, (sizeof(float))) = derived[n];
 
             }
@@ -129,16 +135,23 @@ void forwardPass(   float * g_inVals,
 
             nodeIndexOffset += curLayerWidth; /// the length of the node bias array is the sum of the layer widths
             wgtIndexOffset += curLayerWidth * prevLayerWidth;
- //       }
- //       else
+//       }
+//       else
          if (layer == OUTPUTLAYER)
        {
-            *finalFirstNode = firstNode;    /// remember where we are before returning
-            *finalLastNode = lastNode;
-
             if (gid==0)
+            {
+                for (i = 1; i < LAYERCOUNT; i++)
+                {
+                    debug[d++] = (float)coreIndex[i].firstNode;
+                    debug[d++] = (float)coreIndex[i].lastNode;
+//                    debug[d++] = (float)coreIndex[i].firstWeight;
+//                    debug[d++] = (float)coreIndex[i].lastWeight;
+                    debug[d++] = 1000.00;
+                }
                 for (i=0;i<TOTALDERIVEDNODES;i++)
-                    debug[i] = derived[i];
+                    debug[d++] = derived[i];
+            }
         }
     }
 }
@@ -154,19 +167,18 @@ __kernel void k_forward(    __global float * g_inVals,         /// incoming: the
                             __global float * g_outVals,        /// outgoing: the results of the run
                             __global float * debug)
 {
-    __private int   widths[] = INITWIDTHARRAY;
-    int finalFirstNode, finalLastNode;
     int n0, n;
-
+    __private int   widths[] = INITWIDTHARRAY;
+    __private idx   coreIndex[LAYERCOUNT];
     __private float derived[TOTALDERIVEDNODES];  /// replace with sum of derived layers
     __private float wgt[MAXWEIGHTTOLAYER];                  /// space for local storage of weights ... is filled by the forward pass and used later to train
     __private float biases[TOTALDERIVEDNODES];
 
 
-    forwardPass(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, &finalFirstNode, &finalLastNode, debug);
+    forwardPass(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, coreIndex, debug);
 
-    n0 = finalFirstNode - (TOTALDERIVEDNODES - widths[OUTPUTLAYER]);    /// convert the index of the final derived layer back to a zero base
-    for(n=finalFirstNode; n<finalLastNode; n++)
+    n0 = coreIndex[OUTPUTLAYER].firstNode - (TOTALDERIVEDNODES - widths[OUTPUTLAYER]);    /// convert the index of the final derived layer back to a zero base
+    for(n=coreIndex[OUTPUTLAYER].firstNode; n<coreIndex[OUTPUTLAYER].lastNode; n++)
         g_outVals[n0++] = derived[n];        /// put the last derived vector into g_outVals for transmission to the host
 
 
@@ -196,6 +208,7 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
     int gid = get_global_id(0);
     int d = 0;
 
+    __private idx   coreIndex[LAYERCOUNT];
     __private int   widths[] = INITWIDTHARRAY;
     __private float derived[TOTALDERIVEDNODES];        // could restrict this to the width of the output layer
     __private float delta[LARGESTDERIVEDLAYER];        // could restrict this to the width of the output layer
@@ -206,7 +219,7 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
 
     unsigned int core[] = {core00, core01, core02, core03, core10, core11, core12, core13, core20, core21, core22, core23, core30, core31, core32, core33};
 
-    forwardPass(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, &localFirstNode, &localLastNode, debug);
+    forwardPass(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, coreIndex, debug);
 
     destNodesPerCore = prevLayerWidth / CORECOUNT;                   /// all cores get this many
     destNodesModulus = prevLayerWidth % CORECOUNT;                   /// the remainder are assigned one per node starting from gid == 0
