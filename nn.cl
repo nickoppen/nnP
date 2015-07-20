@@ -75,8 +75,11 @@ void forwardPass(   float * g_inVals,
             for (i=0; i<widths[0]; i++)
                 in[i] = g_inVals[i];
         else                                        /// all other layers
+        {
+            n = nodeIndexOffset - prevLayerWidth;    /// start from the begining of the previous layer's values in the derived value array
             for (i=0; i<prevLayerWidth; i++)
-                in[i] = derived[i];
+                in[i] = derived[n++];
+        }
 
 //        if (gid == 0)
 //        {
@@ -162,7 +165,7 @@ __kernel void k_forward(    __global float * g_inVals,         /// incoming: the
 
     forwardPass(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, &finalFirstNode, &finalLastNode, debug);
 
-    n0 = finalFirstNode - (TOTALDERIVEDNODES - widths[OUTPUTLAYER]);
+    n0 = finalFirstNode - (TOTALDERIVEDNODES - widths[OUTPUTLAYER]);    /// convert the index of the final derived layer back to a zero base
     for(n=finalFirstNode; n<finalLastNode; n++)
         g_outVals[n0++] = derived[n];        /// put the last derived vector into g_outVals for transmission to the host
 
