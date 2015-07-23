@@ -334,6 +334,7 @@ class nn
                                 cl_float * clDebug;
                                 clDebug = (cl_float*)clmalloc(pCon, 2048*sizeof(float), 0);
                                 for(i=0;i<2048;i++) clDebug[i]=-1000;
+                                clWeightDeltas = (cl_float*)clmalloc(pCon, totalWeights*sizeof(float), 0);      // temporary: space for core's to share incoming weight deltas
 
 
                                 for (i=0; i < (*layers)[0].nodeCount; i++)
@@ -364,6 +365,7 @@ class nn
                                 clmsync(pCon, 0, clOutputError, CL_MEM_DEVICE|CL_EVENT_NOWAIT);     /// not sure if I have to sync this one here
 
                                 clmsync(pCon, 0, clDebug, CL_MEM_DEVICE|CL_EVENT_NOWAIT);
+                                clmsync(pCon, 0, clWeightDeltas, CL_MEM_DEVICE|CL_EVENT_NOWAIT);
 
        //cout <<   "Calling clforka\n";
                                 clforka(pCon, 0, krn, &ndr, CL_EVENT_NOWAIT,
@@ -373,11 +375,15 @@ class nn
                                             clWeights,
                                             clOutputError,
                                             clLearningRate,
+                                            clWeightDeltas,
                                             clDebug);
 
        //cout <<   "Transferring memory contents from the Epiphany using clmsync\n";
-                                clmsync(pCon, 0, clOutputError, CL_MEM_HOST|CL_EVENT_NOWAIT);
-                                clmsync(pCon, 0, clDebug, CL_MEM_HOST|CL_EVENT_NOWAIT);
+                                clmsync(pCon, 0, clOutputError, CL_MEM_HOST|CL_EVENT_NOWAIT);   /// The final output error
+                                clmsync(pCon, 0, clWeights, CL_MEM_HOST|CL_EVENT_NOWAIT);       /// The modified weights
+
+                                clmsync(pCon, 0, clWeightDeltas, CL_MEM_HOST|CL_EVENT_NOWAIT);  // testing
+                                clmsync(pCon, 0, clDebug, CL_MEM_HOST|CL_EVENT_NOWAIT);         // testing
                                 clflush(pCon, 0, 0);
                                 clwait(pCon, 0, CL_ALL_EVENT);
 
@@ -991,6 +997,7 @@ class nn
 					(*pFile) << "#define LARGESTDERIVEDLAYER " << largestDerivedLayer << "\n";
 					(*pFile) << "#define LARGESTINPUTLAYER " << largestInputLayer << "\n";
 					(*pFile) << "#define TOTALDERIVEDNODES " << totalDerivedNodes << "\n";
+//					(*pFile) << "#define TOTALWEIGHTS " << totalWeights << "\n";
 					(*pFile) << "#define INITWIDTHARRAY {";
 					for (i=0; i<layerCount-1; i++)
                         (*pFile) << (*layers)[i].nodeCount << ",";
@@ -1012,11 +1019,12 @@ class nn
     cl_float    *       clInputLayer;
     cl_float    *       clOutputLayer;
     cl_float    *       clOutputError;
-    cl_float    *       clWeights;          // all of the network's weights in one big array
-    cl_float    *       clNodeBiases;       // the biases for each node used to calculate the node output
-    cl_int      *       clNodeWeightIndex;  // the index into the weight array where this node's weights star
+    cl_float    *       clWeights;          /// all of the network's weights in one big array
+    cl_float    *       clNodeBiases;       /// the biases for each node used to calculate the node output
+    cl_int      *       clNodeWeightIndex;  /// the index into the weight array where this node's weights star
+    cl_float    *       clWeightDeltas;     //  temporary: shared space for cores to share their incoming weight deltas for back prop
 
-    size_t              totalWeights;
+    size_t              totalWeights;       /// the number of weights in the whole network
 
     /// variables to be written to the cl defs file
     unsigned int        maxWeightToLayer;   /// the largest number of weights between two layers

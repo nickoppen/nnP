@@ -194,7 +194,8 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
                           __global float * g_nodeBiases,      /// incoming: g_nodeBiases all in one big array
                           __global float * g_weights,         /// incoming: g_weights for all layers in one big array
                           __global float * g_error,          /// outgoing: the cumulative differentials between the actual output and the deisred output
-                          __global float   learningRate,
+                          __global float   g_learningRate,
+                          __global float * g_weightDeltas,
                           __global float * debug)
 {
 //    int firstNode, lastNode, localFirstNode, localLastNode;
@@ -209,6 +210,7 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
     int d = 0;
 
     float wErr;
+    float learningRate = g_learningRate;
 
     __private idx   coreIndex[LAYERCOUNT];
     __private int   widths[] = INITWIDTHARRAY;
@@ -288,7 +290,8 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
     */
      //               linkErrors[(n * curLayerWidth) + w] = (delta[n] * wgt[w]);
                 /// Use Debug to communication between cores for now
-                debug[(n * curLayerWidth) + w] = (delta[n0i] * wErr);
+                g_weightDeltas[(n * curLayerWidth) + w] = (delta[n0i] * wErr);
+                debug[d++] = (delta[n0i] * wErr);
             }
 
             /// update the node bias
