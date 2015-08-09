@@ -1,7 +1,7 @@
 #include "/home/parallella/Work/nnP/coreId16.inc"
 //#include <e32_opencl_ext.h>
 //#include <coprthr_device.h>
-
+//#include <e32_opencl_ext.h>
 #include "/home/parallella/Work/nnP/cldefs.inc"
 /// cldefs.inc contains #defines for all static variables
 /// example contents of cldefs.inc
@@ -71,6 +71,7 @@ void forwardPass(   float * in,
         coreIndex[layer].lastWeight = coreIndex[layer].firstWeight + ((localLastNode - localFirstNode) * prevLayerWidth);
 
       ///memcopy(...);     /// only copy in the g_weights that are needed for this node
+//      memcpy(wgt, g_weights + (coreIndex[layer].firstWeight * sizeof(float)), (coreIndex[layer].lastWeight - coreIndex[layer].firstWeight));
         w=0;
         for (i = coreIndex[layer].firstWeight; i < coreIndex[layer].lastWeight; i++)
             wgt[w++] = g_weights[i];
@@ -82,17 +83,6 @@ void forwardPass(   float * in,
             for (i=0; i<prevLayerWidth; i++)
                 in[i] = derived[n++];
         }
-
-//        if (gid == 0)
-//        {
-//            for (i=0; i<prevLayerWidth; i++)
-//                debug[d++] = in[i];
-//            debug[d++] = 1000.0;
-//        }
-
-//            /// testing - inialise the derived layer to see what values have ben calculated
-//        for (i=0; i<LARGESTDERIVEDLAYER; i++)
-//            derived[i]= (float)1.0;
 
         ///memcopy(..);
         for (n = coreIndex[layer].firstNode; n < coreIndex[layer].lastNode; n++)
@@ -209,7 +199,7 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
     int gid = get_global_id(0);
     int d = 0;
 
-    float wErr;
+    float wErr, w0;         /// local copies of the weight error and the weight
     float learningRate = g_learningRate;
 
     __private idx   coreIndex[LAYERCOUNT];
@@ -260,7 +250,7 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
             {
                 outputError[n0i] = 0;
                 for (w = firstWeight; w < lastWeight; w++)          /// not sure if this is right - check the indexes into debug
-                    outputError[n0i] += debug[w];
+                    outputError[n0i] += g_weightDeltas[w];
                 delta[n0i] = derived[n] * (1 - derived[n]) * outputError[n0i];      /// Check this
                 n0i++;
             }
@@ -280,7 +270,8 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
             {
                 //wgt[w] -= learningRate * delta[n] * derived[n];
                 wErr = delta[n0i] * derived[n];         /// problem - what delta am I multiplying by what weight?
-                g_weights[w] -= learningRate * wErr;       /// update the global weight array for now  --  hsould I multiply the weight error by the learning rate here or one line above?
+                w0 = g_weights[w];
+                g_weights[w] = w0 - (learningRate * wErr);       /// update the global weight array for now  --  hsould I multiply the weight error by the learning rate here or one line above?
                 debug[d++] = wErr;
 
     /* This bit is to send the weight errors directly to the owning node in the previous layer
@@ -296,8 +287,8 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
     */
      //               linkErrors[(n * curLayerWidth) + w] = (delta[n] * wgt[w]);
                 /// Use g_weightDeltas to communication between cores for now
-                g_weightDeltas[(n * curLayerWidth) + w] = (delta[n0i] * wErr);      /// wErr is already multiplied by delta[n0i]??
-                debug[d++] = (delta[n0i] * wErr);
+                g_weightDeltas[(n * prevLayerWidth) + w] = (delta[n0i] * w0);      /// + w is wrong here - w is the index into the global weight array - it needs to be the 1, 2, 3,... incoming weight
+                debug[d++] = (delta[n0i] * w0);
                 debug[d++] = 1000.0;
             }
 
