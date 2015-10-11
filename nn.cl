@@ -163,8 +163,8 @@ __kernel void k_forward(    __global float * g_inVals,         /// incoming: the
     __private int   widths[] = INITWIDTHARRAY;
     __private idx   coreIndex[LAYERCOUNT];
     __private float in[LARGESTINPUTLAYER];
-    __private float derived[TOTALDERIVEDNODES];  /// replace with sum of derived layers
-    __private float wgt[MAXWEIGHTTOLAYER];                  /// space for local storage of weights ... is filled by the forward pass and used later to train
+    __private float derived[TOTALDERIVEDNODES];
+    __private float wgt[MAXWEIGHTTOLAYER];       /// space for local storage of weights ... is filled by the forward pass and used later to train
     __private float biases[TOTALDERIVEDNODES];
 
 
@@ -230,7 +230,7 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
         prevLayerWidth = widths[layer - 1];
         curLayerWidth = widths[layer];
 
-        n0 = coreIndex[OUTPUTLAYER].firstNode - (TOTALDERIVEDNODES - widths[OUTPUTLAYER]);      /// n0 is the location of the node in the current layer; n0i starts at n0 and iterations upwards
+        n0 = coreIndex[OUTPUTLAYER].firstNode - (TOTALDERIVEDNODES - widths[OUTPUTLAYER]);      /// n0 is the location of the first node in the current layer; n0i starts at n0 and iterates upwards
         if (layer == OUTPUTLAYER)
         {
             /// calculate the OUTPUT layer error
