@@ -197,7 +197,7 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
 //    int firstNode, lastNode, localFirstNode, localLastNode;
     int n, layer_firstLocalNode, layer_localNodeIndexer, w;
     int prevLayer_firstGlobalNode, prevLayer_globalNodeIterator;
-    int nextLayer_firstGlobalNode;
+    int nextLayer_firstGlobalWeight;
     int layer;                                          /// counts from n to 1
     int curLayerWidth, nextLayerWidth, prevLayerWidth, firstWeight, lastWeight;
 
@@ -250,17 +250,15 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
         {
             nextLayerWidth = widths[layer + 1];
 
-            /// for each outbound weight
-            firstWeight = coreIndex[layer].firstWeight;
-            lastWeight = firstWeight + nextLayerWidth;
-            nextLayer_firstGlobalNode = coreIndex[layer].nodeIndexOffset;
+            /// for each outbound weight - i.e. for each inboudn weight of the next layer
+            nextLayer_firstGlobalWeight = coreIndex[layer + 1].wgtIndexOffset;
 
             for (n = coreIndex[layer].firstNode; n < coreIndex[layer].lastNode; n++)    // not sure about this
             {
                 outputError = 0;
-                for (w = firstWeight; w < lastWeight; w++)
-                    outputError += g_weightDeltas[nextLayer_firstGlobalNode + ( layer_localNodeIndexer * curLayerWidth) + layer_localNodeIndexer];   /// g_weightDeltas[] mirrors g_weights[] in that weightDeltas are organised around the INCOMING weights - therefore to pick out the deltas for the previous layer you need to pick out the node's delta from each section of the array associated with each next layer node
-                delta[layer_localNodeIndexer] = derived[n] * (1 - derived[n]) * outputError;      /// Check this
+                for (w = 0; w < nextLayerWidth; w++)
+                    outputError += g_weightDeltas[nextLayer_firstGlobalWeight + ( w * curLayerWidth) + layer_localNodeIndexer];   /// g_weightDeltas[] mirrors g_weights[] in that weightDeltas are organised around the INCOMING weights of the next layer
+                delta[layer_localNodeIndexer] = derived[n] * (1 - derived[n]) * outputError;                                      /// therefore to pick out the deltas for the current layer you need to pick out the node's delta from each section of the array associated with each next layer node
                 layer_localNodeIndexer++;
             }
 
@@ -278,9 +276,8 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
             prevLayer_globalNodeIterator = prevLayer_firstGlobalNode;       /// saves having to readdress the coreIndex array
             for (w = firstWeight; w < lastWeight; w++)
             {
-                //wgt[w] -= learningRate * delta[n] * derived[n];
                 w0 = g_weights[w];
-                debug[d++] = g_weights[w] = w0 + (learningRate * delta[layer_localNodeIndexer] * derived[prevLayer_globalNodeIterator++]);  /// update the global weight array for now  --  hsould I multiply the weight error by the learning rate here or one line above?
+                debug[d++] = g_weights[w] = w0 + (learningRate * delta[layer_localNodeIndexer] * derived[prevLayer_globalNodeIterator++]);  /// is theis the right way to multiply LR * delta * PRIVIOUS LAYER OUTPUT???
 
     /* This bit is to send the weight errors directly to the owning node in the previous layer
                 /// pass delta * weight to previous layer
