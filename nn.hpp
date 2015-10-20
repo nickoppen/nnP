@@ -812,7 +812,7 @@ class nn
                 largestDerivedLayer = 0;
                 largestInputLayer = (*layerWidths)[0];
                 maxWeightToLayer = 0;
-                totalDerivedNodes = 0;
+                totalDerivedNodes = (*layerWidths)[0];  /// input layer is copied to the derived value array to streamline forward and back passes
                 for (i=1; i < layerCount; i++)
                 {
                     totalWeights += (*layerWidths)[i] * (*layerWidths)[i-1];
@@ -996,7 +996,7 @@ class nn
 					(*pFile) << "#define MAXWEIGHTTOLAYER " << maxWeightToLayer << "\n";
 					(*pFile) << "#define LARGESTDERIVEDLAYER " << largestDerivedLayer << "\n";
 					(*pFile) << "#define LARGESTINPUTLAYER " << largestInputLayer << "\n";
-					(*pFile) << "#define TOTALDERIVEDNODES " << totalDerivedNodes << "\n";
+					(*pFile) << "#define TOTALNODES " << totalDerivedNodes << "\n";
 //					(*pFile) << "#define TOTALWEIGHTS " << totalWeights << "\n";
 					(*pFile) << "#define INITWIDTHARRAY {";
 					for (i=0; i<layerCount-1; i++)
