@@ -50,10 +50,11 @@ void forwardPass(   float * biases,
 //        for (d=0;d<TOTALNODES;d++)
 //            debug[d] = 0;
 
+    firstWeight = 0;                            /// only the g_weights relevant to thse nodes have been copied into local memory - they are copied into wgt[] with no gaps (unlike biases[])
+    lastWeight = prevLayerWidth = widths[0];
+
     for(layer = 1; layer<LAYERCOUNT; layer++)
     {
-        firstWeight = 0;                            /// only the g_weights relevant to thse nodes have been copied into local memory
-        lastWeight = prevLayerWidth;               /// check boundry condition on the very last weight into the output layer
         for (n = coreIndex[layer].firstNode; n < coreIndex[layer].lastNode; n++)
         {
             activationQuant = 0.0;
@@ -69,17 +70,19 @@ void forwardPass(   float * biases,
             firstWeight = lastWeight;
             lastWeight += prevLayerWidth;
         }
+        prevLayerWidth = widths[layer];
+        lastWeight = firstWeight + prevLayerWidth;      /// over writes lastWeight because we are about to move onto the next layer
 
-            /// transmit the node values calculated here to all other cores. (needed for training only)
-            for (coreI = 0; coreI < CORECOUNT; coreI++)
-            {
-                if (core[coreI] != localCoreId)
-                    for (n=coreIndex[layer].firstNode; n < coreIndex[layer].lastNode; n++)
-                        *(float *)NEIGHBOUR_LOC(core[coreI], derived,  n, (sizeof(float))) = derived[n];
+        /// transmit the node values calculated here to all other cores. (needed for training only)
+        for (coreI = 0; coreI < CORECOUNT; coreI++)
+        {
+            if (core[coreI] != localCoreId)
+                for (n=coreIndex[layer].firstNode; n < coreIndex[layer].lastNode; n++)
+                    *(float *)NEIGHBOUR_LOC(core[coreI], derived,  n, (sizeof(float))) = derived[n];
 
-            }
-            /// make sure that every core has passed all values before proceeding onto the next layer
-            barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+        }
+        /// make sure that every core has passed all values before proceeding onto the next layer
+        barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
 
 /*         if (layer == OUTPUTLAYER)
        {
@@ -110,7 +113,8 @@ void copyIn(float * g_inVals,
             idx * coreIndex,
    __global float * debug)
 {
-    int n, i, w;            /// node, input, weight
+    int n, i;           /// node, input,
+    int w = 0;          /// weight index
     int d = 0;              /// debug
     int gid = get_global_id(0);
     int layer;
@@ -153,13 +157,16 @@ void copyIn(float * g_inVals,
         }
 
 
-if (0)
-{      ///memcopy(...);     /// only copy in the g_weights that are needed for this node
+      ///memcopy(...);     /// only copy in the g_weights that are needed to calculate the nodes assigned to this core
 //      memcpy(wgt, g_weights + (coreIndex[layer].firstWeight * sizeof(float)), (coreIndex[layer].lastWeight - coreIndex[layer].firstWeight));
-        w=0;
-        for (i = coreIndex[layer].firstWeight; i < coreIndex[layer].lastWeight; i++)
-            wgt[w++] = g_weights[i];
-
+/*        for (i = coreIndex[layer].firstWeight; i < coreIndex[layer].lastWeight; i++)
+        {
+            wgt[w] = g_weights[i];
+            debug[d++] = wgt[w];
+            w++;
+        }
+        debug[d++] = 1000;
+*/
         ///memcopy(..);
         for (n = coreIndex[layer].firstNode; n < coreIndex[layer].lastNode; n++)
             biases[n] = g_nodeBiases[n];              /// allocate enough space for a whole bias vector in the layer but only copy the one this core needs   =========================== need to compensate for the input values being int the first part of dervied[]
@@ -172,7 +179,7 @@ if (0)
 
 
     }
-}
+
 }
 
 ///======================================================================================================================
@@ -192,20 +199,21 @@ __kernel void k_forward(    __global float * g_inVals,         /// incoming: the
 //    __private float in[LARGESTINPUTLAYER];
     __private float derived[TOTALNODES]; /// derived[] and biases[] are maintained in parallel - derived[] contanins a copy of the input values g_inVals[] and biases are blank on those indexes
     __private float biases[TOTALNODES];
-    __private float wgt[MAXWEIGHTTOLAYER];       /// space for local storage of weights ... is filled by the forward pass and used later to train
+    __private float wgt[MAXWEIGHTSPERCORE];       /// space for local storage of weights ... is filled by the forward pass and used later to train
 
 
     copyIn(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, coreIndex, debug);
+if(0)
+{    forwardPass(biases, wgt, derived, widths, coreIndex, debug);
+
     if (0)
     {
-    forwardPass(biases, wgt, derived, widths, coreIndex, debug);
-
     /// Copy Out
     n0 = coreIndex[OUTPUTLAYER].firstNode - (TOTALNODES - widths[OUTPUTLAYER]);    /// convert the index of the final derived layer back to a zero base
     for(n=coreIndex[OUTPUTLAYER].firstNode; n<coreIndex[OUTPUTLAYER].lastNode; n++)
         g_outVals[n0++] = derived[n];        /// put the last derived vector into g_outVals for transmission to the host
     }
-
+}
 }
 
 ///======================================================================================================================
@@ -240,7 +248,7 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
 //    __private float in[LARGESTINPUTLAYER];              /// local copy of the input values
     __private float derived[TOTALNODES];        // could restrict this to the width of the output layer
     __private float delta[LARGESTDERIVEDLAYER];        // could restrict this to the width of the output layer
-    __private float wgt[MAXWEIGHTTOLAYER];                  /// space for local storage of weights ... is filled by the forward pass and used later to train
+    __private float wgt[MAXWEIGHTSPERCORE];                  /// space for local storage of weights ... is filled by the forward pass and used later to train
     __private float biases[TOTALNODES];
 
     unsigned int core[] = {core00, core01, core02, core03, core10, core11, core12, core13, core20, core21, core22, core23, core30, core31, core32, core33};

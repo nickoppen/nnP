@@ -5,6 +5,8 @@
 #define PATHTOKERNALFILE "//home//parallella//Work//nnP//nn.cl"
 #define PATHTOCLDEFSFILE "//home//parallella//Work//nnP//cldefs.inc"
 
+#define CORECOUNT 16
+
 using namespace std ;
 
 #include <sys/stat.h> // POSIX only
@@ -811,7 +813,7 @@ class nn
                 nodeBiasArraySize = 0;
                 largestDerivedLayer = 0;
                 largestInputLayer = (*layerWidths)[0];
-                maxWeightToLayer = 0;
+                maxWeightsPerCore = 0;
                 totalDerivedNodes = (*layerWidths)[0];  /// input layer is copied to the derived value array to streamline forward and back passes
                 for (i=1; i < layerCount; i++)
                 {
@@ -820,7 +822,7 @@ class nn
                     largestDerivedLayer = (largestDerivedLayer < (*layerWidths)[i]) ? (*layerWidths)[i] : largestDerivedLayer;
                     totalDerivedNodes += (*layerWidths)[i];
                     largestInputLayer = ((largestInputLayer < (*layerWidths)[i]) && (i != (layerCount - 1))) ? (*layerWidths)[i] : largestInputLayer;
-                    maxWeightToLayer = (maxWeightToLayer < ((*layerWidths)[i] * (*layerWidths)[i-1])) ? ((*layerWidths)[i] * (*layerWidths)[i-1]) : maxWeightToLayer;
+                    maxWeightsPerCore += (((*layerWidths)[i] / CORECOUNT) + 1) * (*layerWidths)[i-1];
                 }
 //                cout << "total weights: " << totalWeights << " total Node Biases " << nodeBiasArraySize << "\n";
 
@@ -991,9 +993,9 @@ class nn
 				{
 					pFile = new fstream();
 					pFile->open(PATHTOCLDEFSFILE, ios::out);
-					(*pFile) << "#define CORECOUNT 16\n";
+					(*pFile) << "#define CORECOUNT " << CORECOUNT << "\n";
 					(*pFile) << "#define LAYERCOUNT " << layerCount << "\n#define OUTPUTLAYER " << (layerCount - 1) << "\n";
-					(*pFile) << "#define MAXWEIGHTTOLAYER " << maxWeightToLayer << "\n";
+					(*pFile) << "#define MAXWEIGHTSPERCORE " << maxWeightsPerCore << "\n";
 					(*pFile) << "#define LARGESTDERIVEDLAYER " << largestDerivedLayer << "\n";
 					(*pFile) << "#define LARGESTINPUTLAYER " << largestInputLayer << "\n";
 					(*pFile) << "#define TOTALNODES " << totalDerivedNodes << "\n";
@@ -1027,7 +1029,7 @@ class nn
     size_t              totalWeights;       /// the number of weights in the whole network
 
     /// variables to be written to the cl defs file
-    unsigned int        maxWeightToLayer;   /// the largest number of weights between two layers
+    unsigned int        maxWeightsPerCore;  /// the largest number of weights between two layers
     unsigned int        nodeBiasArraySize;  /// the sum of all of the layer widths - the minimum size of an array that can fit all nodes
     unsigned int        largestDerivedLayer;/// the widest layer not including the input layer
     unsigned int        largestInputLayer;  /// the widest layer that provides input to a subsequent layer (i.e. ever layer exept the output layer)
