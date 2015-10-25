@@ -32,7 +32,7 @@ void forwardPass(   float * biases,
            __global float * debug)
 {
     int n, w;            /// node, input, weight
-    int d = 0;              /// debug
+//    int d = 0;              /// debug
     int layer;
     int firstWeight, lastWeight;
     int destNodesPerCore, destNodesModulus;
@@ -56,14 +56,14 @@ void forwardPass(   float * biases,
     {
         prevLayerWidth = widths[layer - 1];
         lastWeight = firstWeight + prevLayerWidth;
-        if (gid == 0 )
-        {
-            debug[d++] = layer;
-            debug[d++] = prevLayerWidth;
-            debug[d++] = firstWeight;
-            debug[d++] = lastWeight;
-            debug[d++] = 1000;
-        }
+//        if (gid == 0 )
+//        {
+//            debug[d++] = layer;
+//            debug[d++] = prevLayerWidth;
+//            debug[d++] = firstWeight;
+//            debug[d++] = lastWeight;
+//            debug[d++] = 1000;
+//        }
 
         for (n = coreIndex[layer].firstNode; n < coreIndex[layer].lastNode; n++)
         {
@@ -72,21 +72,36 @@ void forwardPass(   float * biases,
 
             for (w=firstWeight; w<lastWeight; w++)
             {
-                if (gid == 0) debug[d++] = derived[prevLayerOutput];
-                activationQuant += derived[prevLayerOutput++] * wgt[w];
+                activationQuant += derived[prevLayerOutput] * wgt[w];
+//                if (gid == 0)
+//                {
+//                    debug[d++] = activationQuant;
+//                    debug[d++] = derived[prevLayerOutput];
+//                    debug[d++] = wgt[w];
+//                    debug[d++] =  1000;
+//                }
+
+                prevLayerOutput++;
             }
 
             derived[n] = (1.0 / (1.0 + (float)exp(-(biases[n] + activationQuant))));      // sigmoid function f(t) = 1/(1 + e^(-t))
+//                if (gid == 0)
+//                {
+//                    debug[d++] = derived[n];
+//                    debug[d++] = biases[n];
+//                    debug[d++] =  1000;
+//                }
 
-            if (gid == 0) debug[d++] = 1000;
+
+//            if (gid == 0) debug[d++] = 1000;
             firstWeight = lastWeight;
             lastWeight += prevLayerWidth;
-            if (gid == 0)
-            {
-                debug[d++] = firstWeight;
-                debug[d++] = lastWeight;
-                debug[d++] = 1000;
-            }
+//            if (gid == 0)
+//            {
+//                debug[d++] = firstWeight;
+//                debug[d++] = lastWeight;
+//                debug[d++] = 1000;
+//            }
         }
 
         /// transmit the node values calculated here to all other cores. (needed for training only)
@@ -187,7 +202,7 @@ void copyIn(float * g_inVals,
 
         ///memcopy(..);
         for (n = coreIndex[layer].firstNode; n < coreIndex[layer].lastNode; n++)
-            biases[n] = g_nodeBiases[n];              /// allocate enough space for a whole bias vector in the layer but only copy the one this core needs   =========================== need to compensate for the input values being int the first part of dervied[]
+            biases[n] = g_nodeBiases[n - widths[0]];              /// allocate enough space for a whole bias vector in the layer but only copy the one this core needs
 
         if (layer < OUTPUTLAYER)     /// set up for the next pass
         {
