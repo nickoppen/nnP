@@ -401,7 +401,10 @@ class nn
                                     while ((clDebug[i] > -999) && (i<2048))
                                     {
                                         if (clDebug[i] > 999)
+                                        {
+                                            fout << clDebug[i];
                                             fout << "\n";
+                                        }
                                         else
                                             fout  << clDebug[i] << ",";
                                         i++;

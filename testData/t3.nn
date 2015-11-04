@@ -1,7 +1,7 @@
 version(1,2,0)
 name(t3,0,0,0)
 networkTopology(4;8,17,29,12)
-learning(0.1,0)
+learning(0.5,0)
 comment(link(layer, to node, from node, weight))
 comment(node(layer, node, bias))
 comment(Storing layer:1)

@@ -142,6 +142,7 @@ void copyIn(float * g_inVals,
             float * derived,
             int   * widths,
             idx * coreIndex,
+            int * p_d,
    __global float * debug)
 {
     int n, i;           /// node, input,
@@ -178,16 +179,19 @@ void copyIn(float * g_inVals,
         coreIndex[layer].firstWeight = coreIndex[layer].wgtIndexOffset + (localFirstNode * prevLayerWidth);
         coreIndex[layer].lastWeight = coreIndex[layer].firstWeight + ((localLastNode - localFirstNode) * prevLayerWidth);
 
-/*        if (gid == 14)
+        if (gid == 1)
         {
+//            debug[d++] = 1.010101010101;
             debug[d++] = layer;
             debug[d++] = coreIndex[layer].firstNode;
             debug[d++] = coreIndex[layer].lastNode;
+            debug[d++] = coreIndex[layer].nodeIndexOffset;
             debug[d++] = coreIndex[layer].firstWeight;
             debug[d++] = coreIndex[layer].lastWeight;
-//            debug[d++] = 1000;
+//            debug[d++] = 1.010101010101;
+            debug[d++] = 1000;
         }
-*/
+
 
       ///memcopy(...);     /// only copy in the g_weights that are needed to calculate the nodes assigned to this core
 //      memcpy(wgt, g_weights + (coreIndex[layer].firstWeight * sizeof(float)), (coreIndex[layer].lastWeight - coreIndex[layer].firstWeight));
@@ -212,6 +216,8 @@ void copyIn(float * g_inVals,
 
 
     }
+    if (gid == 1) debug[d++] = 1000;
+    (*p_d) = d;
 
 }
 
@@ -227,6 +233,7 @@ __kernel void k_forward(    __global float * g_inVals,         /// incoming: the
                             __global float * debug)
 {
     int n0, n;
+    int d = 0;
     __private int   widths[] = INITWIDTHARRAY;
     __private idx   coreIndex[LAYERCOUNT];
     __private float derived[TOTALNODES]; /// derived[] and biases[] are maintained in parallel - derived[] contanins a copy of the input values g_inVals[] and biases are blank on those indexes
@@ -234,7 +241,7 @@ __kernel void k_forward(    __global float * g_inVals,         /// incoming: the
     __private float wgt[MAXWEIGHTSPERCORE];       /// space for local storage of weights ... is filled by the forward pass and used later to train
 
 
-    copyIn(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, coreIndex, debug);
+    copyIn(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, coreIndex, &d, debug);
     forwardPass(biases, wgt, derived, widths, coreIndex, debug);
 
     /// Copy Out
@@ -280,14 +287,25 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
 
     unsigned int core[] = {core00, core01, core02, core03, core10, core11, core12, core13, core20, core21, core22, core23, core30, core31, core32, core33};
 
-    copyIn(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, coreIndex, debug);
+    copyIn(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, coreIndex, &d, debug);
     forwardPass(biases, wgt, derived, widths, coreIndex, debug);
 
-//    for (layer = OUTPUTLAYER; layer > 0; layer--)
-    for (layer = OUTPUTLAYER; layer >= OUTPUTLAYER -1 ; layer--)
+    for (layer = OUTPUTLAYER; layer > 0; layer--)
+//    for (layer = OUTPUTLAYER; layer >= OUTPUTLAYER -1 ; layer--)
     {
         prevLayerWidth = widths[layer - 1];
         curLayerWidth = widths[layer];
+
+        if(gid == 1)
+        {
+//            debug[d++] = 1.01010101;
+            debug[d++] = (float)layer;
+            debug[d++] = (float)coreIndex[layer].firstNode;
+            debug[d++] = (float)coreIndex[layer].lastNode;
+            debug[d++] = (float)coreIndex[layer].nodeIndexOffset;
+//            debug[d++] = 1.01010101;
+            debug[d++] = 1000;
+        }
 
         layer_localNodeIndexer = layer_firstLocalNode = coreIndex[layer].firstNode - coreIndex[layer].nodeIndexOffset;
         if (layer == OUTPUTLAYER)
@@ -299,15 +317,15 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
                 /// if (lastTrainingSet)
                     g_error[layer_localNodeIndexer] = outputError;                          /// pass the final deltas back
                 delta[layer_localNodeIndexer] = derived[n] * (1 - derived[n]) * outputError;      /// calculate the weight update delta for each output node first derivative of the sigmoid function [Read and Marks pg65]
-//                if (gid == 2)
-//                {
-//                debug[d++] = layer;
+                if (gid == 1)
+                {
+                debug[d++] = layer;
 //                debug[d++] = n;
 //                debug[d++] = layer_localNodeIndexer;
 //                debug[d++] = outputError;
-//                debug[d++] = delta[prevLayer_globalNodeIterator];
+                debug[d++] = delta[layer_localNodeIndexer];
 //                debug[d++] = 1000.0;
-//                }
+                }
                 layer_localNodeIndexer++;
             }
         }
@@ -322,16 +340,27 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
             for (n = coreIndex[layer].firstNode; n < coreIndex[layer].lastNode; n++)    // not sure about this
             {
                 outputError = 0;
+                if (gid == 1)
+                {
+                    debug[d++] = layer;
+//                    debug[d++] = n;
+//                    debug[d++] = layer_localNodeIndexer;
+                }
                 for (w = 0; w < nextLayerWidth; w++)
                 {
                     outputError += g_weightDeltas[nextLayer_firstGlobalWeight + ( w * curLayerWidth) + layer_localNodeIndexer];   /// g_weightDeltas[] mirrors g_weights[] in that weightDeltas are organised around the INCOMING weights of the next layer
-                    if (gid == 0) debug[d++] = outputError;
+//                    if (gid == 1)
+//                    {
+//                        debug[d++] = w;
+//                        debug[d++] = outputError;
+//                    }
                 }
                 delta[layer_localNodeIndexer] = derived[n] * (1 - derived[n]) * outputError;                                      /// therefore to pick out the deltas for the current layer you need to pick out the node's delta from each section of the array associated with each next layer node
-                if (gid == 0)
+                if (gid == 1)
                 {
+//                    debug[d++] = outputError;
                     debug[d++] = delta[layer_localNodeIndexer];
-                    debug[d++] = 1000.0;
+//                    debug[d++] = 1000.0;
                 }
 
                 layer_localNodeIndexer++;
@@ -341,9 +370,9 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
         /// online learning for now
         /// for each inbound weight
         firstWeight = coreIndex[layer].firstWeight;              /// update the __global g_weights array for now
-        lastWeight = firstWeight + prevLayerWidth;               /// check boundry condition on the very last weight into the output layer/// the current node has one incoming weight for each node in the previous layer
+        lastWeight = firstWeight + prevLayerWidth;               /// the current node has one incoming weight for each node in the previous layer
 
-        prevLayer_firstGlobalNode = coreIndex[layer-1].firstNode;   /// layer zero (input layer) is also in derived[]
+        prevLayer_firstGlobalNode = coreIndex[layer-1].nodeIndexOffset;   /// nodeIndexOffset is the first node of the whole layer - layer zero (input layer) is also in derived[]
         layer_localNodeIndexer = layer_firstLocalNode;
 //        if (gid == 2)
 //        {
@@ -363,10 +392,10 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
                 /// Use g_weightDeltas to communication between cores for now
                 g_weightDeltas[w] = (delta[layer_localNodeIndexer] * w0);      /// sotre the delta * un-updated weight in an array that is parallel to the weight array
 
-//                if (gid == 2)
+//                if (gid == 1)
 //                {
-//                debug[d++] = w0;
 //                debug[d++] = delta[layer_localNodeIndexer];
+//                debug[d++] = w0;
 //                debug[d++] = derived[prevLayer_globalNodeIterator];
 //                debug[d++] = learningRate * delta[layer_localNodeIndexer] * derived[prevLayer_globalNodeIterator];
 //                debug[d++] =  g_weights[w];
@@ -377,13 +406,26 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
                 prevLayer_globalNodeIterator++;
             }
 
+                if (gid == 1)
+                {
+                debug[d++] = delta[layer_localNodeIndexer];
+                debug[d++] = biases[n];
+                }
             /// update the node bias
             biases[n] += learningRate * delta[layer_localNodeIndexer];
+
+
+                if (gid == 1)
+                {
+                debug[d++] = biases[n];
+                debug[d++] = 1000.0;
+                }
 
             firstWeight = lastWeight;
             lastWeight += prevLayerWidth;
             layer_localNodeIndexer++;
         }
+        if (gid == 1) debug[d++] = 1000;  /// extra new line in the output for the new layer
         barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);        /// pause for every core to catch up before going onto the next layer
     }
 }
