@@ -1,7 +1,4 @@
 #include "/home/parallella/Work/nnP/coreId16.inc"
-//#include <e32_opencl_ext.h>
-//#include <coprthr_device.h>
-//#include <e32_opencl_ext.h>
 #include "/home/parallella/Work/nnP/cldefs.inc"
 /// cldefs.inc contains #defines for all static variables
 /// example contents of cldefs.inc
@@ -46,7 +43,7 @@ void forwardPass(   float * biases,
     unsigned int localCoreId = LOCAL_MEM_ADDRESS_BASE(gid);
 
 
-    firstWeight = 0;
+    firstWeight = 0;        /// called firstWeight bacause every weight is used to calculate the node value
 
     for(layer = 1; layer<LAYERCOUNT; layer++)
     {
