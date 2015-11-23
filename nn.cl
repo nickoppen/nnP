@@ -281,7 +281,20 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
             }
 
             /// update the node bias
+            if(gid == 0)
+            {
+                debug[d++] = biases[n];
+                debug[d++] = learningRate;
+                debug[d++] = layerNodeIterator;
+                debug[d++] = delta[layerNodeIterator];
+            }
             biases[n] += learningRate * delta[layerNodeIterator];
+            g_nodeBiases[n - widths[0]] = biases[n];         /// return the updated node biases to the host -- one by one for now
+            if(gid == 0)
+            {
+                debug[d++] = biases[n];
+                debug[d++] = 1000;
+            }
 
             firstWeight = lastWeight;
             lastWeight += prevLayerWidth;

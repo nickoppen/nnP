@@ -381,8 +381,12 @@ class nn
                                             clDebug);
 
        //cout <<   "Transferring memory contents from the Epiphany using clmsync\n";
+                                clflush(pCon, 0, 0);
+                                clwait(pCon, 0, CL_ALL_EVENT);
+
                                 clmsync(pCon, 0, clOutputError, CL_MEM_HOST|CL_EVENT_NOWAIT);   /// The final output error
                                 clmsync(pCon, 0, clWeights, CL_MEM_HOST|CL_EVENT_NOWAIT);       /// The modified weights
+                                clmsync(pCon, 0, clNodeBiases, CL_MEM_HOST|CL_EVENT_NOWAIT);    /// The modified biases
 
                                 clmsync(pCon, 0, clWeightDeltas, CL_MEM_HOST|CL_EVENT_NOWAIT);  // testing
                                 clmsync(pCon, 0, clDebug, CL_MEM_HOST|CL_EVENT_NOWAIT);         // testing
