@@ -13,12 +13,12 @@
 
 typedef struct
 {
-    int startNode;          /// Stores the index into the global array of the first node processed by this core
-    int endNode;           /// Stores the index into the global array  of the last node processed by this core
-    int startWeight;        /// Stores the index into the global array of weights of the first weight of the first node
-    int endWeight;         /// Stores the index into the global array of weights of the last weight of the last node
-    int layerNodeZero;    /// Stores the index into the blobal array of the location of the first node in the layer
-    int layerWgtZero;     /// Stores the index into the global array of the location of the first weight of the first node of the current layer
+    int globalStartNode;          /// Stores the index into the global array of the first node processed by this core
+    int globalEndNode;           /// Stores the index into the global array  of the last node processed by this core
+    int globalStartWeight;        /// Stores the index into the global array of weights of the first weight of the first node
+    int globalEndWeight;         /// Stores the index into the global array of weights of the last weight of the last node
+    int globalNodeZeroForLayer;    /// Stores the index into the blobal array of the location of the first node in the layer
+    int globalWgtZeroForLayer;     /// Stores the index into the global array of the location of the first weight of the first node of the current layer
 }   idx;                    /// idx is stored in an array for each layer
 
 void forwardPass(   float * biases,
@@ -28,7 +28,7 @@ void forwardPass(   float * biases,
                     idx * coreIndex//, __global float * debug
                 )
 {
-    int n, w;            /// node, input, weight
+    int n, w;            /// node, weight
 //    int d = 0;              /// debug
     int layer;
     int firstWeight, lastWeight;
@@ -50,10 +50,10 @@ void forwardPass(   float * biases,
         prevLayerWidth = widths[layer - 1];
         lastWeight = firstWeight + prevLayerWidth;
 
-        for (n = coreIndex[layer].startNode; n < coreIndex[layer].endNode; n++)
+        for (n = coreIndex[layer].globalStartNode; n < coreIndex[layer].globalEndNode; n++)
         {
             activationQuant = 0.0;
-            prevLayerOutput = coreIndex[layer-1].layerNodeZero;       /// the location in derived[] that stores the first output from the previous layer
+            prevLayerOutput = coreIndex[layer-1].globalNodeZeroForLayer;       /// the location in derived[] that stores the first output from the previous layer
 
             for (w=firstWeight; w<lastWeight; w++)
             {
@@ -71,7 +71,7 @@ void forwardPass(   float * biases,
         for (coreI = 0; coreI < CORECOUNT; coreI++)
         {
             if (core[coreI] != localCoreId)
-                for (n=coreIndex[layer].startNode; n < coreIndex[layer].endNode; n++)
+                for (n=coreIndex[layer].globalStartNode; n < coreIndex[layer].globalEndNode; n++)
                     *(float *)NEIGHBOUR_LOC(core[coreI], derived,  n, (sizeof(float))) = derived[n];
 
         }
@@ -107,10 +107,11 @@ void copyIn(float * g_inVals,
         derived[n] = g_inVals[n];
     }
 
-    coreIndex[0].layerNodeZero = 0;
-    coreIndex[1].layerNodeZero = widths[0];   /// make sure to start
-    coreIndex[0].layerWgtZero = 0;            /// not used
-    coreIndex[1].layerWgtZero = 0;            /// no weights into the zeroth layer so layer 1 starts from 0
+    coreIndex[0].globalNodeZeroForLayer = 0;
+    coreIndex[1].globalNodeZeroForLayer = widths[0];   /// make sure to start
+    coreIndex[0].globalWgtZeroForLayer = 0;            /// not used
+    coreIndex[1].globalWgtZeroForLayer = 0;            /// no weights into the zeroth layer so layer 1 starts from 0
+
     for(layer = 1; layer<LAYERCOUNT; layer++)
     {
         curLayerWidth = widths[layer];
@@ -119,29 +120,29 @@ void copyIn(float * g_inVals,
         destNodesPerCore = curLayerWidth / CORECOUNT;                   /// all cores get this many
         destNodesModulus = curLayerWidth % CORECOUNT;                   /// the remainder are assigned one per node starting from gid == 2
 
-        coreIndex[layer].startNode = coreIndex[layer].layerNodeZero + ((gid * destNodesPerCore) + min(gid, destNodesModulus)); /// all node biases are in one big array so layerNodeZero records where the current layer starts
-        coreIndex[layer].endNode = coreIndex[layer].startNode + destNodesPerCore + ((gid < destNodesModulus) ? 1 : 0);
-        layerStartNode = coreIndex[layer].startNode - coreIndex[layer].layerNodeZero;                   /// startNode - layerNodeZero is the node index within the current  layer
-        layerEndNode = coreIndex[layer].endNode - coreIndex[layer].layerNodeZero;                     /// layerStartNode and layerEndNode align with the derived value array
-        coreIndex[layer].startWeight = coreIndex[layer].layerWgtZero + (layerStartNode * prevLayerWidth);
-        coreIndex[layer].endWeight = coreIndex[layer].startWeight + ((layerEndNode - layerStartNode) * prevLayerWidth);
+        coreIndex[layer].globalStartNode = coreIndex[layer].globalNodeZeroForLayer + ((gid * destNodesPerCore) + min(gid, destNodesModulus)); /// all node biases are in one big array so globalNodeZeroForLayer records where the current layer starts
+        coreIndex[layer].globalEndNode = coreIndex[layer].globalStartNode + destNodesPerCore + ((gid < destNodesModulus) ? 1 : 0);
+        layerStartNode = coreIndex[layer].globalStartNode - coreIndex[layer].globalNodeZeroForLayer;                   /// startNode - globalNodeZeroForLayer is the node index within the current  layer
+        layerEndNode = coreIndex[layer].globalEndNode - coreIndex[layer].globalNodeZeroForLayer;                     /// layerStartNode and layerEndNode align with the derived value array
+        coreIndex[layer].globalStartWeight = coreIndex[layer].globalWgtZeroForLayer + (layerStartNode * prevLayerWidth);
+        coreIndex[layer].globalEndWeight = coreIndex[layer].globalStartWeight + ((layerEndNode - layerStartNode) * prevLayerWidth);
 
       ///memcopy(...);     /// only copy in the g_weights that are needed to calculate the nodes assigned to this core
-//      memcpy(wgt, g_weights + (coreIndex[layer].startWeight * sizeof(float)), (coreIndex[layer].endWeight - coreIndex[layer].startWeight));
-        for (i = coreIndex[layer].startWeight; i < coreIndex[layer].endWeight; i++)
+//      memcpy(wgt, g_weights + (coreIndex[layer].globalStartWeight * sizeof(float)), (coreIndex[layer].globalEndWeight - coreIndex[layer].globalStartWeight));
+        for (i = coreIndex[layer].globalStartWeight; i < coreIndex[layer].globalEndWeight; i++)
         {
             wgt[w] = g_weights[i];
             w++;
         }
 
         ///memcopy(..);
-        for (n = coreIndex[layer].startNode; n < coreIndex[layer].endNode; n++)
+        for (n = coreIndex[layer].globalStartNode; n < coreIndex[layer].globalEndNode; n++)
             biases[n] = g_nodeBiases[n - widths[0]];              /// allocate enough space for a whole bias vector in the layer but only copy the one this core needs
 
         if (layer < OUTPUTLAYER)     /// set up for the next pass
         {
-            coreIndex[layer + 1].layerNodeZero = coreIndex[layer].layerNodeZero + curLayerWidth; /// the length of the node bias array is the sum of the layer widths
-            coreIndex[layer + 1].layerWgtZero = coreIndex[layer].layerWgtZero + (curLayerWidth * prevLayerWidth);
+            coreIndex[layer + 1].globalNodeZeroForLayer = coreIndex[layer].globalNodeZeroForLayer + curLayerWidth; /// the length of the node bias array is the sum of the layer widths
+            coreIndex[layer + 1].globalWgtZeroForLayer = coreIndex[layer].globalWgtZeroForLayer + (curLayerWidth * prevLayerWidth);
         }
 
 
@@ -174,8 +175,8 @@ __kernel void k_forward(    __global float * g_inVals,         /// incoming: the
     forwardPass(biases, wgt, derived, widths, coreIndex);//, debug);
 
     /// Copy Out
-    n0 = coreIndex[OUTPUTLAYER].startNode - (TOTALNODES - widths[OUTPUTLAYER]);    /// convert the index of the final derived layer back to a zero base
-    for(n=coreIndex[OUTPUTLAYER].startNode; n<coreIndex[OUTPUTLAYER].endNode; n++)
+    n0 = coreIndex[OUTPUTLAYER].globalStartNode - (TOTALNODES - widths[OUTPUTLAYER]);    /// convert the index of the final derived layer back to a zero base
+    for(n=coreIndex[OUTPUTLAYER].globalStartNode; n<coreIndex[OUTPUTLAYER].globalEndNode; n++)
         g_outVals[n0++] = derived[n];        /// put the last derived vector into g_outVals for transmission to the host
 }
 
@@ -225,12 +226,12 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
         prevLayerWidth = widths[layer - 1];
         curLayerWidth = widths[layer];
 
-        layerStartNode = coreIndex[layer].startNode - coreIndex[layer].layerNodeZero;   /// store this sot that it only has to be calculated once
+        layerStartNode = coreIndex[layer].globalStartNode - coreIndex[layer].globalNodeZeroForLayer;   /// store this sot that it only has to be calculated once
         layerNodeIterator = layerStartNode;
         if (layer == OUTPUTLAYER)
         {
             /// calculate the OUTPUT layer error
-            for (n = coreIndex[OUTPUTLAYER].startNode; n < coreIndex[OUTPUTLAYER].endNode; n++)
+            for (n = coreIndex[OUTPUTLAYER].globalStartNode; n < coreIndex[OUTPUTLAYER].globalEndNode; n++)
             {
                 outputError = g_desiredVals[layerNodeIterator] - derived[n];      /// width of desired == width outputlayer
                 /// if (lastTrainingSet)
@@ -245,9 +246,9 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
             nextLayerWidth = widths[layer + 1];
 
             /// for each outbound weight - i.e. for each inbound weight of the next layer
-            nextLayer_globalWgtZero = coreIndex[layer + 1].layerWgtZero;
+            nextLayer_globalWgtZero = coreIndex[layer + 1].globalWgtZeroForLayer;
 
-            for (n = coreIndex[layer].startNode; n < coreIndex[layer].endNode; n++)    // not sure about this
+            for (n = coreIndex[layer].globalStartNode; n < coreIndex[layer].globalEndNode; n++)    // not sure about this
             {
                 outputError = 0;
                 for (w = 0; w < nextLayerWidth; w++)
@@ -262,14 +263,14 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
 
         /// online learning for now
         /// for each inbound weight
-        firstWeight = coreIndex[layer].startWeight;              /// update the __global g_weights array for now
+        firstWeight = coreIndex[layer].globalStartWeight;              /// update the __global g_weights array for now
         lastWeight = firstWeight + prevLayerWidth;               /// the current node has one incoming weight for each node in the previous layer
 
         layerNodeIterator = layerStartNode;
 
-        for (n = coreIndex[layer].startNode; n < coreIndex[layer].endNode; n++)
+        for (n = coreIndex[layer].globalStartNode; n < coreIndex[layer].globalEndNode; n++)
         {
-            prevLayer_globalNodeIterator = coreIndex[layer-1].layerNodeZero;     /// layerNodeZero is the first node of the whole layer - layer zero (input layer) is also in derived[]
+            prevLayer_globalNodeIterator = coreIndex[layer-1].globalNodeZeroForLayer;     /// globalNodeZeroForLayer is the first node of the whole layer - layer zero (input layer) is also in derived[]
             for (w = firstWeight; w < lastWeight; w++)
             {
                 unmodifiedWeight = g_weights[w];
@@ -281,20 +282,8 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
             }
 
             /// update the node bias
-            if(gid == 0)
-            {
-                debug[d++] = biases[n];
-                debug[d++] = learningRate;
-                debug[d++] = layerNodeIterator;
-                debug[d++] = delta[layerNodeIterator];
-            }
             biases[n] += learningRate * delta[layerNodeIterator];
             g_nodeBiases[n - widths[0]] = biases[n];         /// return the updated node biases to the host -- one by one for now
-            if(gid == 0)
-            {
-                debug[d++] = biases[n];
-                debug[d++] = 1000;
-            }
 
             firstWeight = lastWeight;
             lastWeight += prevLayerWidth;
