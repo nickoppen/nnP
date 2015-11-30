@@ -406,6 +406,7 @@ class nn
                                     {
                                         if (clDebug[i] > 999)
                                         {
+                                            /// a value greater tha 999 is to insert a \n in the output but print the value just in case it gets in ther by mistake
                                             fout << clDebug[i];
                                             fout << "\n";
                                         }

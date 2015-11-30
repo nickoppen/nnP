@@ -13,14 +13,19 @@
 
 typedef struct
 {
-    int globalStartNode;          /// Stores the index into the global array of the first node processed by this core
-    int globalEndNode;           /// Stores the index into the global array  of the last node processed by this core
-    int globalStartWeight;        /// Stores the index into the global array of weights of the first weight of the first node
-    int globalEndWeight;         /// Stores the index into the global array of weights of the last weight of the last node
+    int globalStartNode;           /// Stores the index into the global array of the first node processed by this core
+    int globalEndNode;             /// Stores the index into the global array  of the last node processed by this core
+    int globalStartWeight;         /// Stores the index into the global array of weights of the first weight of the first node
+    int globalEndWeight;           /// Stores the index into the global array of weights of the last weight of the last node
     int globalNodeZeroForLayer;    /// Stores the index into the blobal array of the location of the first node in the layer
     int globalWgtZeroForLayer;     /// Stores the index into the global array of the location of the first weight of the first node of the current layer
-}   idx;                    /// idx is stored in an array for each layer
+}   idx;                           /// idx is stored in an array for each layer
 
+///
+///     Forward pass
+///
+///     Run the input through each layer suing the sigmoid function as the activation function
+///
 void forwardPass(   float * biases,
                     float * wgt,
                     float * derived,
@@ -67,7 +72,7 @@ void forwardPass(   float * biases,
             lastWeight += prevLayerWidth;
         }
 
-        /// transmit the node values calculated here to all other cores. (needed for training only)
+        /// transmit the node values calculated here to all other cores.
         for (coreI = 0; coreI < CORECOUNT; coreI++)
         {
             if (core[coreI] != localCoreId)
@@ -81,6 +86,11 @@ void forwardPass(   float * biases,
     }
 }
 
+///
+/// Copy in the static data into the local arrays - using individual values until I can get dma_copy working
+///
+/// Copy in the netowrk input into derived[] so that the input can be treated like the output of layer -1
+///
 void copyIn(float * g_inVals,
             float * g_nodeBiases,
             float * biases,
@@ -152,9 +162,11 @@ void copyIn(float * g_inVals,
 }
 
 ///======================================================================================================================
-
+///
 ///         FEED FORWARD
-
+///
+///     Run forward and then export the results
+///
 ///======================================================================================================================
 __kernel void k_forward(    __global float * g_inVals,         /// incoming: the input values to the net
                             __global float * g_nodeBiases,     /// incoming: g_nodeBiases all in one big array
@@ -181,9 +193,11 @@ __kernel void k_forward(    __global float * g_inVals,         /// incoming: the
 }
 
 ///======================================================================================================================
-
+///
 ///         TRAIN
-
+///
+///     Run the foward pass, and then layer by layer, calculate the errorand update the weights and node biases
+///
 ///======================================================================================================================
 __kernel void k_train(    __global float * g_inVals,          /// incoming: the input values to the new
                           __global float * g_desiredVals,     /// incoming: the desired outputvalues
@@ -221,6 +235,10 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
     copyIn(g_inVals, g_nodeBiases, biases, g_weights, wgt, derived, widths, coreIndex, &d, debug);
     forwardPass(biases, wgt, derived, widths, coreIndex);//, debug);
 
+    /// Calculate the output error for thewhole network
+    /// This is done by finding the difference of the netowrk out put and the desired output
+    /// The @raw error is returned to the host to indicate how training is goingand is then
+    /// used to find the derivative of the activation (sigmoid) function
     for (layer = OUTPUTLAYER; layer > 0; layer--)
     {
         prevLayerWidth = widths[layer - 1];
@@ -240,7 +258,10 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
                 layerNodeIterator++;
             }
         }
-
+        /// Calculate the error for the intermediate layers
+        /// The error contributed by each outgoing weight is calculated on the previous pass and stored in a _global g_weightDeltas[]
+        /// This array mirrors the weights therefore is organised around the INBOUND node. Here we are looking at the outbound
+        /// node so we have to pick out values spread over the whole array
         else
         {
             nextLayerWidth = widths[layer + 1];
@@ -261,8 +282,11 @@ __kernel void k_train(    __global float * g_inVals,          /// incoming: the 
             }
         }
 
-        /// online learning for now
-        /// for each inbound weight
+        /// Calculate the weight and node bias updates (online learning for now)
+        /// using the node deltas calculated above calulated the update for each inbound weight
+        /// and the calculate the contribution of each weight to the error of the node and store them in g_weightDeltas[] to calculate
+        /// the error in the privious layer error.
+        /// Then calculate  the node bias update in the local biases[] and write them back to global g_nodeBiases
         firstWeight = coreIndex[layer].globalStartWeight;              /// update the __global g_weights array for now
         lastWeight = firstWeight + prevLayerWidth;               /// the current node has one incoming weight for each node in the previous layer
 
