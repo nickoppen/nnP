@@ -1,16 +1,12 @@
 # nnP
-The parallella version of my feed forward - back propagation neural network engine.
+This fork is to freeze the files referred to in my blog post titled, "Getting it Done - What I learnt from finishing the Neural Network Algorithm". 
 
-Source files for the basic feed forward system based on allocating nodes to cores.
+It is not a finished system as such. Development will continue in the master branch.
 
-Before you compile this program, check the #defines at the top of the nn.hpp file to make sure that the PATHTOKERNELFILE and PATHTOCLDEFSFILE reflect where these files are on your system. They must be in the same directory.
+If you want to download it and get it running the t3.nn network int /testData is the one that I've been using to test it. The t3t.sh file contains the shell commands to load, train and save the network. The cldefs.inc file contain the parameters needed by the kernels to run this network.
 
-The Code::Blocks cpb file is included but if you prefer the command line looks like this:
+To run your own network with a different topology you must change the code in the train() function to use JIT compilation in nn.hpp (comment out line 347 and uncomment line 350). The run() function is currently set to use JIT compilation (see line 186).  If you wish to stick to the same topology for a while you can change the train() and run() functions back to linked kernels once the cldefs.inc file has been written. Make sure you use the correct syntax in the data and training files (see the master branch wiki).
 
-g++ -std=c++11 -Wall -fexceptions -g -g -I/usr/local/browndeer/include -I/home/linaro/Work/nnP -c /home/linaro/Work/nnP/nnP.cpp -o obj/Debug/nnP.o
+Please direct any feedback to me via the parallella forum or via the blog post on Google Blogger.
 
-g++ -L/usr/local/browndeer/lib -o bin/Debug/nnP obj/Debug/nnP.o -lstdcl -locl
-
-Make sure that the paths are correct for your system.
-
-PS This was not added by Andreas. I had not changed the author when I made my first commit.
+nick
