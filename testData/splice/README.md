@@ -1,35 +1,32 @@
 
-Splice Training Set
+Splice Training Set<br><br>
 
-See splice.names for more details. The original data set is available here: http://archive.ics.uci.edu/ml/datasets/Molecular+Biology+%28Splice-junction+Gene+Sequences%29
+See splice.names for more details. The original data set is available here: http://archive.ics.uci.edu/ml/datasets/Molecular+Biology+%28Splice-junction+Gene+Sequences%29<br><br>
 
-Translations
+Translations<br><br>
 
-The original data set contains instances of sixty letters made up of A, G, T, C, D, N, S and R. The first four are definite but the remaining are ambiguous thus:
+The original data set contains instances of sixty letters made up of A, G, T, C, D, N, S and R. The first four are definite but the remaining are ambiguous thus:<br>
 
-Character	Meaning
-D			A or G or T
-N			A or G or C or T
-S			C or G
-R			A or G
+D -> A or G or T<br>
+N -> A or G or C or T<br>
+S -> C or G<br>
+R -> A or G<br><br>
 
-Therefore, I have converted each value into a fuzzy set thus:
+Therefore, I have converted each value into a fuzzy set thus:<br><br>
 
-Character	Encoding
-A			1,0,0,0
-G			0,1,0,0
-T			0,0,1,0
-C			0,0,0,1
-D			0.33333,0.33333,0.33333,0
-N			0.25,0.25,0.25,0.25
-S			0,0.5,0,0.5
-R			0.5,0.5,0,0,
+A -> 1,0,0,0<br>
+G -> 0,1,0,0<br>
+T -> 0,0,1,0<br>
+C -> 0,0,0,1<br>
+D -> 0.33333,0.33333,0.33333,0<br>
+N -> 0.25,0.25,0.25,0.25<br>
+S -> 0,0.5,0,0.5<br>
+R -> 0.5,0.5,0,0<br><br>
 
-The classification is a simple translation thus:
+The classification is a simple translation thus:<br><br>
 
-Classification	Encoding
-EI				1,0,0
-IE				0,1,0
-N (Neither)		0,0,1
+EI -> 1,0,0<br>
+IE -> 0,1,0<br>
+N (Neither) -> 0,0,1<br><br>
 
-Approximately 10% of the training data has been retained as a test set.
+Approximately 10% of the training data has been retained as a test set.<br>
